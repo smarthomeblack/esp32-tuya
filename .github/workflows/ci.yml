@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - master
+
+# A new push to the same ref replaces the in-flight run (saves minutes).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (ESP-IDF v6.0.1)
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v6.0.1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # No submodules in this repo; false is the default (kept explicit).
+          submodules: false
+
+      # git in the container runs as a different user than the checkout
+      # owner (would fail with "dubious ownership").
+      - name: Mark workspace safe for git (container)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build web assets
+        run: python scripts/build_web.py
+
+      - name: Lint web import graph
+        run: python scripts/check_web_imports.py
+
+      # Pinned to the version the tree was reformatted with; generated
+      # vector headers stay exempt (byte-stable gen_test_vectors.py output).
+      - name: Lint C++ formatting (clang-format)
+        run: |
+          . $IDF_PATH/export.sh
+          python -m pip install --no-cache-dir clang-format==23.1.3
+          find components main -type f \( -name '*.cc' -o -name '*.h' \) \
+            ! -path 'components/tuya_crypto/src/test_vectors.h' \
+            ! -path 'components/tuya_cloud/src/pipeline_vectors.h' -print0 \
+            | xargs -0 -r clang-format -n -Werror
+
+      # Container steps do not inherit the image ENTRYPOINT environment
+      # (PATH + python venv), so source the IDF export first.
+      # CI has no ccache persistence; the cache only doubles disk usage and
+      # exhausts the runner disk, so ccache is disabled.
+      - name: Build firmware
+        run: |
+          . $IDF_PATH/export.sh
+          CCACHE_DISABLE=1 idf.py -B build build
+
+  # The espressif/idf container has no Node; these web checks run on
+  # the plain runner, parallel with the build job.
+  web-smoke:
+    name: Web smoke + host validators
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Load web ES module graph
+        run: node scripts/load_modules.mjs
+
+      - name: Check web i18n parity
+        run: python scripts/check_web_i18n.py
+
+      - name: Run host-side validators
+        run: |
+          python scripts/validate_store_golden.py
+          python scripts/simulate_store_golden.py
+          python -m pip install --user --break-system-packages cryptography
+          python scripts/gen_test_vectors.py
+          # Diff gate: regenerating must leave the generated headers
+          # byte-identical; a diff means they were hand-edited.
+          git diff --exit-code -- components/tuya_crypto/src/test_vectors.h components/tuya_cloud/src/pipeline_vectors.h
+
+  # Host-build of the pure-logic boot self-test suites: the same component
+  # test sources the hub runs in its boot gate, compiled against host_tests/
+  # shims with plain gcc/g++/cmake (no ESP-IDF). Catches check failures AND
+  # silent per-suite check-count drift via pinned PASS lines. Hardware-bound
+  # suites (crypto: eFuse keys, sys: NVS/heap, assets: flash partition) stay
+  # device-only; the runner prints that gap on every run.
+  selftest:
+    name: Self-tests (host build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      # managed_components/ is gitignored; fetch the pinned upstream cJSON
+      # the component manager resolves to (espressif__cjson 1.7.19~2 ->
+      # DaveGamble/cJSON submodule commit). Bump alongside the
+      # idf_component.yml dependency if it ever changes.
+      - name: Fetch pinned cJSON source
+        run: |
+          mkdir -p managed_components/espressif__cjson/cJSON
+          curl -fsSL -o managed_components/espressif__cjson/cJSON/cJSON.c \
+            https://raw.githubusercontent.com/DaveGamble/cJSON/b2890c8d76bbb64e710585ebc0a917196b9c67e7/cJSON.c
+          curl -fsSL -o managed_components/espressif__cjson/cJSON/cJSON.h \
+            https://raw.githubusercontent.com/DaveGamble/cJSON/b2890c8d76bbb64e710585ebc0a917196b9c67e7/cJSON.h
+
+      - name: Build and run host self-tests
+        run: |
+          cmake -S host_tests -B build-host-tests -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-host-tests -j"$(nproc)"
+          ./build-host-tests/selftest_runner

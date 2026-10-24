@@ -1,0 +1,11 @@
+menu "Tuya Cloud"
+
+    config TUYA_NTP_SERVER
+        string "NTP server used for time sync"
+        default "pool.ntp.org"
+        help
+            SNTP server for TimeSync::SyncBlocking() (X-time and token
+            expiry are ms since epoch). A regional pool lowers
+            first-sync latency.
+
+endmenu

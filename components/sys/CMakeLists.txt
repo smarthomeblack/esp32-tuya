@@ -1,0 +1,32 @@
+idf_component_register(
+    SRCS
+        "src/settings.cc"
+        "src/system_info.cc"
+        "src/led_status.cc"
+        "src/wifi_station.cc"
+        "src/dns_server.cc"
+        "src/wifi_provision.cc"
+        "src/log_buffer.cc"
+        "src/log_capture.cc"
+        "src/cpu_monitor.cc"
+        "src/self_test.cc"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        "nvs_flash"
+        "esp_timer"
+        "esp_wifi"
+        "esp_netif"
+        "esp_event"
+        "lwip"
+        "freertos"
+        "log"
+        "heap"
+    PRIV_REQUIRES
+        "esp_driver_gpio"
+        "esp_app_format"
+        "esp_http_server"
+        "tuya_crypto"  # JsonNestingWithinLimit — portal body depth guard
+    EMBED_TXTFILES
+        "src/wifi_portal.html"
+)

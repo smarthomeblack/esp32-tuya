@@ -1,0 +1,16 @@
+menu "Tuya Hub"
+
+    choice HUB_LANG
+        prompt "Default UI language"
+        default HUB_LANG_EN
+        help
+            Default language for the Web Control UI (can be changed at runtime
+            from the Settings page).
+
+        config HUB_LANG_VI
+            bool "Vietnamese"
+        config HUB_LANG_EN
+            bool "English"
+    endchoice
+
+endmenu

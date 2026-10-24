@@ -1,0 +1,6 @@
+dependencies:
+  espressif/cjson:
+    version: "^1.7.19"
+    # Public: api_response.h includes <cJSON.h>, so dependents need the
+    # cJSON include path transitively.
+    require: public

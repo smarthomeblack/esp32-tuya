@@ -1,0 +1,11 @@
+# Name,       Type, SubType,  Offset,    Size,      Flags
+# 16MB ESP32-S3 hub: dual OTA slots + otadata rollback; "assets" (1MB)
+# carved from the END of storage (littlefs keeps its 0x800000 offset).
+nvs,          data, nvs,      0x9000,    0x6000,
+otadata,      data, ota,      0xF000,    0x2000,
+phy_init,     data, phy,      0x11000,   0x1000,
+ota_0,        app,  ota_0,    0x20000,   0x3F0000,
+ota_1,        app,  ota_1,    0x410000,  0x3F0000,
+storage,      data, littlefs, 0x800000,  0x6E8000,
+assets,       data, 0x40,     0xEE8000,  0x100000,
+coredump,     data, coredump, 0xFE8000,  0x10000,

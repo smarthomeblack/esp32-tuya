@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tuya Hub — WiFi Setup</title>
+<style>
+:root{--bg:#0f1115;--card:#171c26;--line:#242c3b;--field:#0e131b;--text:#e8ecf4;--muted:#8b94a7;--accent:#6366f1;--accent2:#22d3ee;--err:#f87171;--ok:#34d399}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;min-height:100vh;background:radial-gradient(900px 500px at 80% -10%,rgba(99,102,241,.16),transparent 60%),var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;display:flex;justify-content:center;padding:24px 16px 40px}
+.card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px 20px;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff;letter-spacing:-.5px}
+h1{font-size:19px;margin:0;line-height:1.2}
+.sub{color:var(--muted);font-size:13px;margin:3px 0 18px}
+label{display:block;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.4px;margin:14px 0 6px;text-transform:uppercase}
+.row{display:flex;gap:8px}
+input{width:100%;background:var(--field);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:12px 14px;font-size:15px;outline:none;transition:border-color .15s}
+input:focus{border-color:var(--accent)}
+.eye{background:none;border:1px solid var(--line);border-radius:12px;color:var(--muted);padding:10px 12px;font-size:12px;cursor:pointer;white-space:nowrap}
+.scan-head{display:flex;justify-content:space-between;align-items:center;margin:18px 0 6px}
+.scan-head span{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.4px;text-transform:uppercase}
+.refresh{background:none;border:1px solid var(--line);border-radius:10px;color:var(--muted);padding:5px 10px;font-size:12px;cursor:pointer}
+.refresh:disabled{opacity:.5}
+.list{margin:0;padding:0;list-style:none;max-height:216px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--field)}
+.ap{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.ap:last-child{border-bottom:none}
+.ap:active{background:#1b2230}
+.ap .name{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10.5px}
+.badge-open{color:var(--ok);border:1px solid var(--ok);padding:1px 6px;border-radius:6px}
+.bars{display:inline-flex;align-items:flex-end;gap:2px;height:12px}
+.bars i{width:3px;background:#313b4e;border-radius:1px}
+.bars i.on{background:var(--accent2)}
+.bars i:nth-child(1){height:3px}.bars i:nth-child(2){height:6px}.bars i:nth-child(3){height:9px}.bars i:nth-child(4){height:12px}
+.skel{padding:10px 12px;border-bottom:1px solid var(--line)}
+.skel:last-child{border-bottom:none}
+.skel .bar{height:14px;border-radius:6px;background:linear-gradient(90deg,#1b2230 25%,#232c3e 50%,#1b2230 75%);background-size:200% 100%;animation:sh 1.1s linear infinite}
+@keyframes sh{from{background-position:200% 0}to{background-position:-200% 0}}
+.empty{padding:14px 12px;color:var(--muted);font-size:13px;text-align:center}
+.btn{width:100%;margin-top:20px;padding:13px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .15s}
+.btn:disabled{opacity:.45;cursor:default}
+.err{display:none;margin-top:14px;padding:10px 12px;border-radius:10px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:var(--err);font-size:13px}
+.apikey{margin-top:16px;padding:12px 14px;border:1px dashed var(--line);border-radius:12px;background:var(--field)}
+.apikey label{margin:0 0 6px}
+.apikey code{display:block;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;letter-spacing:1px;color:var(--accent2);word-break:break-all}
+.apikey small{display:block;color:var(--muted);font-size:11.5px;margin-top:6px;line-height:1.4}
+.done{display:none;text-align:center;padding:30px 0 10px}
+.spinner{width:46px;height:46px;border-radius:50%;border:4px solid rgba(255,255,255,.12);border-top-color:var(--accent);margin:0 auto 16px;animation:rot 1s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.done p{margin:4px 0;font-size:15px;font-weight:600}
+.done small{color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">
+    <div class="logo">TH</div>
+    <div>
+      <h1>Tuya Hub</h1>
+      <div class="sub">Connect to WiFi</div>
+    </div>
+  </div>
+
+  <div class="apikey" id="apikey-box" hidden>
+    <label>Initial API key</label>
+    <code id="apikey">__INITIAL_API_KEY__</code>
+    <small>Use this code to sign in to the web UI after connecting WiFi — you'll be asked to change it on first sign-in. It's also printed in the serial log.</small>
+  </div>
+
+  <form id="f" autocomplete="off">
+    <label for="ssid">WiFi name (SSID)</label>
+    <div class="row">
+      <input id="ssid" type="text" placeholder="Pick or type a WiFi name" autocapitalize="none" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="scan-head">
+      <span>Available networks</span>
+      <button type="button" class="refresh" id="refresh">↻ Rescan</button>
+    </div>
+    <ul class="list" id="list"></ul>
+    <label for="pw">Password</label>
+    <div class="row">
+      <input id="pw" type="password" placeholder="WiFi password (leave empty if open)" autocapitalize="none" autocorrect="off" spellcheck="false">
+      <button type="button" class="eye" id="eye">Show</button>
+    </div>
+    <div class="err" id="err"></div>
+    <button type="button" class="btn" id="connect">Connect</button>
+  </form>
+  <div class="done" id="done">
+    <div class="spinner"></div>
+    <p>Connecting…</p>
+    <small>The device will restart. Wait about 30 seconds,<br>then reconnect to your WiFi.</small>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var ssidInput = $('ssid'), pwInput = $('pw'), list = $('list'), refreshBtn = $('refresh'),
+      connectBtn = $('connect'), errBox = $('err'), form = $('f'), done = $('done');
+  var scanning = false, connecting = false;
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function showError(msg) { errBox.textContent = msg; errBox.style.display = 'block'; }
+  function hideError() { errBox.style.display = 'none'; }
+  function barsHtml(rssi) {
+    var n = rssi >= -55 ? 4 : rssi >= -67 ? 3 : rssi >= -80 ? 2 : 1, h = '';
+    for (var i = 1; i <= 4; i++) h += '<i' + (i <= n ? ' class="on"' : '') + '></i>';
+    return '<span class="bars">' + h + '</span>';
+  }
+  function skeleton() {
+    var h = '';
+    for (var i = 0; i < 4; i++) h += '<li class="skel"><div class="bar"></div></li>';
+    list.innerHTML = h;
+  }
+  function render(aps) {
+    if (!aps.length) {
+      list.innerHTML = '<li class="empty">No networks found nearby</li>';
+      return;
+    }
+    var h = '';
+    for (var i = 0; i < aps.length; i++) {
+      var a = aps[i];
+      h += '<li class="ap" data-ssid="' + esc(a.ssid) + '"><span class="name">' + esc(a.ssid) +
+           '</span><span class="meta">' + (a.open ? '<span class="badge-open">open</span>' : '') +
+           barsHtml(a.rssi) + '</span></li>';
+    }
+    list.innerHTML = h;
+    for (var j = 0; j < list.children.length; j++) {
+      list.children[j].onclick = (function (li) {
+        return function () { ssidInput.value = li.getAttribute('data-ssid'); pwInput.focus(); };
+      })(list.children[j]);
+    }
+  }
+
+  function scan() {
+    if (scanning || connecting) return;
+    scanning = true;
+    hideError();
+    skeleton();
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Scanning…';
+    fetch('/api/wifi/scan', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.success) throw new Error(j.error || 'scan_failed');
+        render(j.ap_list || []);
+      })
+      .catch(function () {
+        render([]);
+        showError('WiFi scan failed. Tap "Rescan".');
+      })
+      .then(function () {
+        scanning = false;
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '↻ Rescan';
+      });
+  }
+
+  function connect() {
+    if (connecting) return;
+    var ssid = ssidInput.value.trim();
+    if (!ssid) { showError('Please pick or type a WiFi name.'); return; }
+    hideError();
+    connecting = true;
+    connectBtn.disabled = true;
+    fetch('/api/wifi/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid: ssid, password: pwInput.value })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.success) throw new Error(j.error || 'connect_failed');
+        form.style.display = 'none';
+        done.style.display = 'block';
+      })
+      .catch(function () {
+        connecting = false;
+        connectBtn.disabled = false;
+        showError('Could not save WiFi. Check and try again.');
+      });
+  }
+
+  $('eye').onclick = function () {
+    var show = pwInput.type === 'password';
+    pwInput.type = show ? 'text' : 'password';
+    this.textContent = show ? 'Hide' : 'Show';
+  };
+  refreshBtn.onclick = scan;
+  connectBtn.onclick = connect;
+  scan();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tuya Hub</title>
+<meta name="theme-color" content="#0f1115">
+<meta name="description" content="Tuya Hub — smart home control center">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tuya Hub">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/css/base.css">
+<link rel="stylesheet" href="/css/dashboard.css">
+<link rel="stylesheet" href="/css/rooms.css">
+<link rel="stylesheet" href="/css/scenes.css">
+<link rel="stylesheet" href="/css/settings.css">
+<link rel="stylesheet" href="/css/onboarding.css">
+<link rel="stylesheet" href="/css/scan.css">
+<link rel="stylesheet" href="/css/logs.css">
+<link rel="stylesheet" href="/css/ui.css">
+<script src="/qrcode.min.js"></script>
+<script type="module" src="/js/app.js"></script>
+</head>
+<body>
+<div id="app">
+  <div class="splash" id="splash">
+    <div class="splash-logo" aria-hidden="true">
+      <svg viewBox="0 0 512 512" width="64" height="64">
+        <defs>
+          <linearGradient id="slg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#6366f1"/>
+            <stop offset="1" stop-color="#22d3ee"/>
+          </linearGradient>
+        </defs>
+        <path d="M256 96 108 220v172a16 16 0 0 0 16 16h264a16 16 0 0 0 16-16V220Z"
+              fill="none" stroke="url(#slg)" stroke-width="28" stroke-linejoin="round"/>
+        <g fill="none" stroke="url(#slg)" stroke-width="24" stroke-linecap="round">
+          <path d="M256 168a62 62 0 0 0-34 114v22a8 8 0 0 0 8 8h52a8 8 0 0 0 8-8v-22a62 62 0 0 0-34-114Z"/>
+          <path d="M238 342h36"/>
+        </g>
+      </svg>
+    </div>
+    <h1 class="splash-title">Tuya Hub</h1>
+    <div class="splash-spin" aria-hidden="true"></div>
+  </div>
+</div>
+</body>
+</html>

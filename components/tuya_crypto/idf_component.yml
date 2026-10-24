@@ -1,0 +1,5 @@
+dependencies:
+  espressif/cjson:
+    version: "^1.7.19"
+    # Public: json_fields.h is a public header that includes <cJSON.h>.
+    require: public

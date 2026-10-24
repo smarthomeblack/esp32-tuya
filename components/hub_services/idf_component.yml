@@ -1,0 +1,5 @@
+dependencies:
+  espressif/cjson:
+    version: "^1.7.19"
+    # Private: only src/ files include <cJSON.h>, never a public header.
+    require: private

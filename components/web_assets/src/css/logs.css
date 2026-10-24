@@ -1,0 +1,67 @@
+/* Meters + the web logbox. */
+
+.row .meter {
+  margin-top: 5px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .08);
+  overflow: hidden;
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--ok);
+  transition: width .4s var(--ease);
+}
+
+.meter i.warn { background: var(--warn); }
+.meter i.err { background: var(--err); }
+
+#seg-loglvl { margin: 0 0 10px; }
+
+.logbox {
+  height: 240px;
+  overflow-y: auto;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  -webkit-overflow-scrolling: touch;
+}
+
+.log-line {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.log-t {
+  color: var(--muted);
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.log-tag {
+  color: var(--accent2);
+  flex: none;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-line.lvl-e .log-msg { color: var(--err); }
+.log-line.lvl-w .log-msg { color: var(--warn); }
+.log-line.lvl-d .log-msg { color: var(--muted); }
+
+.log-empty { color: var(--muted); padding: 10px 2px; }
+

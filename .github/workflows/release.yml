@@ -1,0 +1,178 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# A re-pushed tag queues behind the in-flight run (never cancel mid-release).
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Cheap gate first: a bad tag fails in seconds, not after the ~10-min build.
+  preflight:
+    name: Preflight (tag must match VERSION)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: "Guard: tag must match VERSION"
+        run: |
+          want="v$(cat VERSION)"
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "::error::pushed tag $GITHUB_REF_NAME != v$(cat VERSION) from the VERSION file"
+            exit 1
+          fi
+
+  build:
+    name: Build + package (ESP-IDF v6.0.1)
+    needs: preflight
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v6.0.1
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (full history — release.py embeds git HEAD)
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+          fetch-depth: 0
+
+      # git in the container runs as a different user than the checkout
+      # owner; release.py's rev-parse would fail ("dubious ownership").
+      - name: Mark workspace safe for git (container)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build web assets
+        run: python scripts/build_web.py
+
+      # Container steps do not inherit the image ENTRYPOINT environment
+      # (PATH + python venv), so source the IDF export first.
+      - name: Build firmware
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py -B build build
+
+      # release.py needs the IDF python (esptool) for merge-bin.
+      - name: Package + self-verify (dist/release)
+        run: |
+          . $IDF_PATH/export.sh
+          python scripts/release.py
+
+      - name: Upload dist/release
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-dist
+          path: dist/release/
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    # gh is preinstalled on the ubuntu runner host — not inside espressif/idf.
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # Checkout first: its clean step would wipe downloaded artifacts.
+      - name: Checkout (full history — previous-tag lookup)
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+          fetch-depth: 0
+
+      - name: Download dist/release
+        uses: actions/download-artifact@v8
+        with:
+          name: release-dist
+          path: dist/release
+
+      - name: "Guard: tag must match VERSION"
+        run: |
+          want="v$(cat VERSION)"
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "::error::pushed tag $GITHUB_REF_NAME != v$(cat VERSION) from the VERSION file"
+            exit 1
+          fi
+
+      - name: Compose release notes (template + generated changelog)
+        run: |
+          notes=dist/release/RELEASE_NOTES.md
+          prev="$(git tag --list 'v*' --sort=-v:refname | grep -vxF "$GITHUB_REF_NAME" | head -n 1 || true)"
+          echo "tag: $GITHUB_REF_NAME, previous tag: ${prev:-<none>}"
+          args=(repos/"$GITHUB_REPOSITORY"/releases/generate-notes -f tag_name="$GITHUB_REF_NAME")
+          if [ -n "$prev" ]; then
+            args+=(-f previous_tag_name="$prev")
+          fi
+          if gh api "${args[@]}" > "$RUNNER_TEMP/generated-notes.json"; then
+            if body="$(jq -r '.body // empty' "$RUNNER_TEMP/generated-notes.json")" && [ -n "$body" ]; then
+              awk '!/^<!-- release-notes-changelog/' "$notes" > "$RUNNER_TEMP/notes-template.md"
+              { cat "$RUNNER_TEMP/notes-template.md"; printf '%s\n' "$body"; } > "$notes"
+              echo "notes: template + generated changelog (appended under '## Changes')"
+            else
+              echo "::warning::generated changelog is empty — template notes only"
+            fi
+          else
+            echo "::warning::gh api generate-notes failed — template notes only"
+          fi
+
+      - name: Create release (factory + ota + assets + sums + manifest)
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file dist/release/RELEASE_NOTES.md \
+            dist/release/tuya_hub_*_factory.bin \
+            dist/release/tuya_hub_*_ota.bin \
+            dist/release/web_assets_*.bin \
+            dist/release/SHA256SUMS \
+            dist/release/release-manifest.json
+
+      - name: Verify release assets (names + sizes)
+        run: |
+          json="$(gh release view "$GITHUB_REF_NAME" --json url,assets)"
+          echo "$(echo "$json" | jq -r '.url')"
+          count="$(echo "$json" | jq '.assets | length')"
+          echo "release has $count asset(s) (expected 5):"
+          echo "$json" | jq -r '.assets[] | "  \(.name)  \(.size) B"'
+          fail=0
+          for f in dist/release/tuya_hub_*_factory.bin dist/release/tuya_hub_*_ota.bin \
+                   dist/release/web_assets_*.bin dist/release/SHA256SUMS \
+                   dist/release/release-manifest.json; do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing local artifact $f"
+              fail=1
+              continue
+            fi
+            name="$(basename "$f")"
+            local_size="$(stat -c '%s' "$f")"
+            up="$(echo "$json" | jq -r --arg n "$name" '[.assets[] | select(.name == $n)][0].size // empty')"
+            if [ -z "$up" ]; then
+              echo "::error::$name missing from the release"
+              fail=1
+            elif [ "$up" != "$local_size" ]; then
+              echo "::error::$name size mismatch: release $up B, local $local_size B"
+              fail=1
+            else
+              echo "OK $name: $local_size B (release == local)"
+            fi
+          done
+          if [ "$count" -ne 5 ]; then
+            echo "::error::expected exactly 5 assets, release has $count"
+            fail=1
+          fi
+          if [ "$fail" -eq 0 ]; then
+            echo "PASS -- 5 release assets verified (names + sizes match local)"
+          fi
+          exit "$fail"

@@ -1,0 +1,99 @@
+/* Room sections: sticky room headers over the per-room card grids. */
+
+.room-list { display: flex; flex-direction: column; gap: 20px; }
+
+.room { min-width: 0; }
+
+.room-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  position: sticky;
+  top: calc(var(--header-h) + env(safe-area-inset-top));
+  z-index: 3;
+  margin: 0 0 8px;
+  padding: 0 2px;
+  background: rgba(15, 17, 21, .86);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  scroll-margin-top: calc(var(--header-h) + 4px);
+}
+
+.room-head svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+  transition: transform .15s var(--ease);
+}
+
+.room.collapsed .room-head svg { transform: rotate(-90deg); }
+
+.room-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-peek {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-off {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, .14);
+  color: var(--warn);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.room-count {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Off-screen room grids skip layout/paint; never on .room (sticky breaks). */
+.room-grid {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 240px;
+}
+
+/* Explicit empty state: the grid node itself always ships (U6). */
+.room-empty {
+  grid-column: 1 / -1;
+  padding: 4px 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.room.collapsed .room-grid { display: none; }
+
+.room.collapsed .room-head { margin-bottom: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .room-head svg { transition: none; }
+}

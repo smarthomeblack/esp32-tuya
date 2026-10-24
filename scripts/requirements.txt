@@ -1,0 +1,4 @@
+# All scripts in this directory are pure Python stdlib. The single third-party
+# dependency, cryptography, is needed only to regenerate the golden test
+# vectors (scripts/gen_test_vectors.py): pip install -r scripts/requirements.txt
+cryptography>=3.3

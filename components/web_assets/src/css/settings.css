@@ -1,0 +1,320 @@
+/* Settings tab: sections, rows, forms, tables, upload meters. */
+
+.section { margin-bottom: 16px; }
+
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  margin: 20px 4px 10px;
+}
+
+.rows {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child { border-bottom: none; }
+
+.row .ico {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.row .ico svg { width: 17px; height: 17px; }
+
+.row .body { flex: 1; min-width: 0; }
+
+.row .title { font-size: 14.5px; font-weight: 600; }
+
+.row .desc {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row .end {
+  flex: none;
+  color: var(--muted);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row .end.ok { color: var(--ok); font-weight: 600; }
+.row .end.warn { color: var(--warn); font-weight: 600; }
+.row .end.err { color: var(--err); font-weight: 600; }
+
+.row.click:active { background: var(--card-hover); }
+
+/* language segmented control */
+
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--field);
+  border: 1px solid var(--line);
+}
+
+.seg button {
+  flex: 1;
+  height: 44px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--muted);
+  transition: all .15s var(--ease);
+}
+
+.seg button.active {
+  background: var(--grad);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, .35);
+}
+
+/* compact variant: short labels inside a .row (VI/EN) */
+.seg-sm { padding: 3px; border-radius: 10px; }
+
+.seg-sm button {
+  flex: none;
+  height: 28px;
+  min-width: 46px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  letter-spacing: .3px;
+}
+
+/* rssi bars */
+
+.bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+
+.bars i { width: 3px; background: #313b4e; border-radius: 1px; }
+
+.bars i.on { background: var(--accent2); }
+.bars i:nth-child(1) { height: 3.5px; }
+.bars i:nth-child(2) { height: 7px; }
+.bars i:nth-child(3) { height: 10.5px; }
+.bars i:nth-child(4) { height: 14px; }
+
+/* action buttons */
+
+.btn {
+  width: 100%;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--grad);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, .3);
+  transition: opacity .15s var(--ease), transform .1s var(--ease);
+}
+
+.btn:disabled { opacity: .45; box-shadow: none; }
+.btn:active { transform: scale(.98); }
+
+.btn-ghost {
+  width: 100%;
+  height: 46px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .04);
+  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 700;
+  transition: background .15s var(--ease), transform .1s var(--ease);
+}
+
+.btn-ghost:active { background: var(--card-hover); transform: scale(.98); }
+
+.btn-danger {
+  width: 100%;
+  height: 46px;
+  border-radius: 13px;
+  background: rgba(248, 113, 113, .12);
+  border: 1px solid rgba(248, 113, 113, .45);
+  color: var(--err);
+  font-size: 14.5px;
+  font-weight: 700;
+  transition: background .15s var(--ease), transform .1s var(--ease);
+}
+
+.btn-danger:active { background: rgba(248, 113, 113, .2); transform: scale(.98); }
+
+.danger-zone { margin-top: 8px; }
+
+/* collapsible section header (a button — same look as .section-title) */
+
+.oa-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  cursor: pointer;
+  font: inherit;
+}
+
+.oa-title .oa-chev {
+  display: flex;
+  color: var(--muted);
+  transition: transform .2s var(--ease);
+}
+
+.oa-title .oa-chev svg { width: 16px; height: 16px; }
+
+.oa-title[aria-expanded="true"] .oa-chev { transform: rotate(180deg); }
+
+.oa-rows.hide { display: none; }
+
+/* state dot in the status row's .end */
+
+.row .end.oa-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.oa-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--offline);
+  flex: none;
+}
+
+.oa-dot.ok { background: var(--ok); box-shadow: 0 0 6px rgba(52, 211, 153, .55); }
+.oa-dot.warn { background: var(--warn); box-shadow: 0 0 6px rgba(251, 191, 36, .45); }
+
+/* action buttons row (edit + disconnect share one row) */
+
+.oa-actions { display: flex; gap: 10px; }
+
+.oa-actions .btn-ghost,
+.oa-actions .btn-danger { flex: 1; height: 44px; }
+
+/* credential form */
+
+.oa-form-wrap { display: none; }
+
+.oa-form-wrap.show { display: block; }
+
+.oa-form { padding: 14px 16px 16px; border-bottom: 1px solid var(--line); }
+
+.oa-field { margin-bottom: 12px; }
+
+.oa-field label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  margin: 0 0 6px 2px;
+}
+
+.oa-input {
+  width: 100%;
+  height: 46px;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 0 14px;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  transition: border-color .15s var(--ease);
+}
+
+.oa-input:focus { border-color: var(--accent); }
+
+.oa-input::placeholder { color: #55606f; font-weight: 500; }
+
+/* password inputs + the show/hide eye button */
+
+.oa-pw { position: relative; }
+
+.oa-pw .oa-input { padding-right: 50px; }
+
+.oa-eye {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  border-radius: 10px;
+}
+
+.oa-eye:active { color: var(--text); }
+
+.oa-eye svg { width: 19px; height: 19px; }
+
+/* datacenter select (native control, chevron drawn in) */
+
+.oa-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b94a7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 15px;
+}
+
+.oa-select option { color: #1a1f29; background: #fff; }
+
+.oa-form .btn { margin-top: 4px; }
+
+/* ---------- security section + login gate ---------- */
+
+/* the login gate is a real <form> on .onb-card (Enter submits) */
+.gate-card { margin: 0; }
+
+/* the change-key form reuses the .oa-form fields, standalone in a section */
+.sec-form { border-bottom: none; }
+
+/* ---------- asset + OTA upload sections ---------- */
+
+/* the progress meter row (reuses the .row .meter markup from logs.css) */
+.row .meter.ast-meter { margin-top: 0; }
+
+/* the full-width upload button sits in its own row */
+.row .btn { width: 100%; }
+

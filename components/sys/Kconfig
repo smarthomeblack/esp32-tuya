@@ -1,0 +1,10 @@
+menu "Sys"
+
+    config SYS_LED_GPIO
+        int "Status LED GPIO"
+        default -1
+        help
+            GPIO number of a simple on-board LED used for status indication.
+            Set to -1 if the board has no status LED (headless operation).
+
+endmenu

@@ -1,0 +1,68 @@
+# sdkconfig defaults — ESP32 Tuya Smart Home Hub
+
+# Single target: lets a bare `idf.py build` configure without set-target.
+CONFIG_IDF_TARGET="esp32s3"
+
+# Reproducible builds: no compile timestamp in the app descriptor.
+CONFIG_APP_COMPILE_TIME_DATE=n
+
+# --- Compiler ---
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# --- Bootloader ---
+CONFIG_BOOTLOADER_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y
+# Anti-brick OTA rollback — a new app must confirm itself
+# (esp_ota_mark_app_valid_cancel_rollback) or the bootloader reverts.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# --- Partition table ---
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/tuya_16m.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+
+# --- HTTP server (Web Control UI) ---
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
+CONFIG_HTTPD_MAX_URI_LEN=2048
+CONFIG_HTTPD_WS_SUPPORT=y
+# The /ws ?token= gate runs in the WS pre-handshake callback.
+CONFIG_HTTPD_WS_PRE_HANDSHAKE_CB_SUPPORT=y
+# Without this, a full httpd control queue silently drops queued work
+# (lwIP recvmbox overflow) and broadcasts vanish without any error.
+CONFIG_HTTPD_QUEUE_WORK_BLOCKING=y
+
+# --- Network ---
+CONFIG_LWIP_MAX_SOCKETS=24
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=32
+# HTTPD_QUEUE_WORK_BLOCKING takes one slot per ctrl message on this
+# semaphore, from session closes and broadcasts on any task: keep it
+# above the httpd socket cap (ws_handler.cc asserts the cap part).
+CONFIG_LWIP_UDP_RECVMBOX_SIZE=16
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+
+# --- System / tasks ---
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+# WDT expiry panics (reboot) instead of log-only — a hung task self-recovers.
+CONFIG_ESP_TASK_WDT_PANIC=y
+
+# --- Core dump (postmortem debugging; partition "coredump" 64KB exists) ---
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+
+# --- NVS encryption (HMAC-based key scheme, ESP32-S3 eFuse) ---
+# XTS-AES keys are derived on the fly from an HMAC key burnt into eFuse block
+# KEY0 on first boot: no nvs_keys partition, no flash encryption needed.
+# The burn is one-way — plaintext NVS is migrated once, then unreadable off-chip.
+CONFIG_NVS_ENCRYPTION=y
+CONFIG_NVS_SEC_KEY_PROTECT_USING_HMAC=y
+CONFIG_NVS_SEC_HMAC_EFUSE_KEY_ID=0
+
+# --- TLS memory strategy ---
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+
+# --- FreeRTOS runtime stats (CPU monitor) ---
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_RUN_TIME_COUNTER_TYPE_U64=y

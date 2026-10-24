@@ -1,0 +1,11 @@
+dependencies:
+  espressif/mqtt:
+    version: "^1.0.0"
+    # Public (CMakeLists uses PRIV_REQUIRES; this declaration is what pulls
+    # esp-mqtt into the build — main also lists it, one version serves both).
+    require: public
+  espressif/cjson:
+    version: "^1.7.19"
+    # Private: this component's public headers are cJSON-free; only its
+    # src/*.cc files (message parsing / config parsing) include <cJSON.h>.
+    require: private

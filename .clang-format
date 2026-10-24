@@ -1,0 +1,13 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+IndentCaseLabels: true
+ColumnLimit: 100
+AccessModifierOffset: -4
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: true
+DerivePointerAlignment: false
+PointerAlignment: Left
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+SpacesBeforeTrailingComments: 2

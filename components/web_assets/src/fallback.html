@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tuya Hub</title>
+<style>
+:root{--bg:#0f1115;--card:#171c26;--line:rgba(255,255,255,.08);--text:#e8ecf4;--muted:#8b93a7;--grad:linear-gradient(135deg,#6366f1,#22d3ee)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.wrap{width:100%;max-width:400px;text-align:center}
+.logo{width:64px;height:64px;margin:0 auto 10px;display:block}
+h1{font-size:18px;margin-bottom:6px}
+p.sub{color:var(--muted);font-size:13.5px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;text-align:left}
+label{display:block;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin:12px 0 6px}
+input{width:100%;height:46px;background:#0d1017;border:1px solid var(--line);border-radius:12px;color:var(--text);padding:0 14px;font-size:15px}
+input:focus{outline:none;border-color:#6366f1}
+button{width:100%;height:48px;margin-top:16px;border:none;border-radius:13px;background:var(--grad);color:#fff;font-size:15px;font-weight:700}
+button:disabled{opacity:.45}
+#out{margin-top:14px;font-size:13.5px;min-height:20px;color:var(--muted)}
+#out.ok{color:#34d399}#out.err{color:#f87171}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+    <path d="M256 96 108 220v172a16 16 0 0 0 16 16h264a16 16 0 0 0 16-16V220Z" fill="none" stroke="url(#g)" stroke-width="28" stroke-linejoin="round"/>
+    <path d="M256 168a62 62 0 0 0-34 114v22a8 8 0 0 0 8 8h52a8 8 0 0 0 8-8v-22a62 62 0 0 0-34-114Z" fill="none" stroke="url(#g)" stroke-width="24" stroke-linecap="round"/>
+    <path d="M238 342h36" fill="none" stroke="url(#g)" stroke-width="24" stroke-linecap="round"/>
+  </svg>
+  <h1 id="ttl">Tuya Hub</h1>
+  <p class="sub" id="sub"></p>
+  <div class="card">
+    <label for="key" id="lk"></label>
+    <input id="key" type="password" autocomplete="off">
+    <label for="file" id="lf"></label>
+    <input id="file" type="file" accept=".bin">
+    <button id="go"></button>
+    <div id="out"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var vi = navigator.language && navigator.language.toLowerCase().indexOf('vi') === 0;
+  var L = {
+    sub: vi ? 'Không tìm thấy giao diện trên hub. Nạp file .bin để khôi phục.'
+            : 'The web UI was not found on the hub. Upload a .bin to restore it.',
+    key: vi ? 'Mã API key' : 'API key',
+    file: vi ? 'File giao diện (.bin)' : 'UI image (.bin)',
+    go: vi ? 'Tải lên' : 'Upload',
+    busy: vi ? 'Đang tải lên…' : 'Uploading…',
+    pick: vi ? 'Hãy chọn file .bin' : 'Please pick a .bin file',
+    keylen: vi ? 'Nhập mã API key (ít nhất 8 ký tự)' : 'Enter the API key (at least 8 characters)',
+    ok: vi ? 'Đã nạp thành công — đang tải lại…' : 'Uploaded — reloading…',
+    fail: vi ? 'Lỗi: ' : 'Error: '
+  };
+  document.documentElement.lang = vi ? 'vi' : 'en';
+  document.getElementById('sub').textContent = L.sub;
+  document.getElementById('lk').textContent = L.key;
+  document.getElementById('lf').textContent = L.file;
+  document.getElementById('go').textContent = L.go;
+  var out = document.getElementById('out');
+  document.getElementById('go').addEventListener('click', function () {
+    var file = document.getElementById('file').files[0];
+    var key = document.getElementById('key').value;
+    if (!file) { out.className = 'err'; out.textContent = L.pick; return; }
+    if (!key || key.length < 8) { out.className = 'err'; out.textContent = L.keylen; return; }
+    out.className = ''; out.textContent = L.busy;
+    fetch('/api/asset/upload', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + key },
+      body: file
+    }).then(function (r) {
+      return r.json().then(function (j) { return { s: r.status, j: j }; });
+    }).then(function (r) {
+      if (r.s === 200 && r.j && r.j.success) {
+        out.className = 'ok'; out.textContent = L.ok;
+        setTimeout(function () { location.replace('/'); }, 2000);
+      } else {
+        var msg = r.j && r.j.error ? (r.j.error.code || '') : String(r.s);
+        out.className = 'err'; out.textContent = L.fail + msg;
+      }
+    }).catch(function (e) {
+      out.className = 'err'; out.textContent = L.fail + e;
+    });
+  });
+})();
+</script>
+</body>
+</html>

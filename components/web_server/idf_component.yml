@@ -1,0 +1,11 @@
+dependencies:
+  espressif/mdns:
+    version: "^1.2.0"
+    # Private: only src/web_server.cc includes <mdns.h>; declared here so
+    # the dependency moves with the component (main also lists it).
+    require: private
+  espressif/cjson:
+    version: "^1.7.19"
+    # Private: the REST/WS JSON building is src-only (rest_api.cc /
+    # ws_handler.cc); no public header of this component exposes cJSON.
+    require: private

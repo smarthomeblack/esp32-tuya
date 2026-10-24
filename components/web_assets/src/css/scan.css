@@ -1,0 +1,459 @@
+/* Card gear (entity editor entry). */
+
+.card-gear {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  margin: -2px -4px 0 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: background .15s var(--ease), color .15s var(--ease);
+}
+
+/* Invisible hit area: 34px + 2x5px = 44px square. */
+.card-gear::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+}
+
+.card-gear:active { background: var(--card-hover); color: var(--text); }
+.card-gear svg { width: 17px; height: 17px; }
+
+/* Tall cards (the wizard credentials form): top-aligned, document scrolls. */
+.onb-wrap.tall { align-items: flex-start; }
+
+.wz-card .oa-form { padding: 0 0 4px; border-bottom: none; }
+
+.wz-status {
+  min-height: 18px;
+  margin: 4px 2px 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Custom checkbox (candidates + entity editor). */
+
+/* Native input visually hidden but focusable (the label is the tap
+   target); :checked + .cbx paints the box. */
+.cand-check input,
+.ent-row input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cbx {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, .22);
+  background: rgba(255, 255, 255, .04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s var(--ease), border-color .15s var(--ease);
+}
+
+.cbx svg {
+  width: 14px;
+  height: 14px;
+  color: #fff;
+  opacity: 0;
+  transform: scale(.4);
+  transition: opacity .15s var(--ease), transform .15s var(--ease);
+}
+
+input:checked + .cbx {
+  background: var(--grad);
+  border-color: transparent;
+}
+
+input:checked + .cbx svg { opacity: 1; transform: none; }
+
+input:disabled + .cbx { opacity: .35; }
+
+input:focus-visible + .cbx { outline: 2px solid var(--accent2); outline-offset: 2px; }
+
+/* Scan / candidates panel. */
+
+.scan-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 70;   /* below the dialogs (80) and the toast (90) */
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity .2s var(--ease), transform .2s var(--ease);
+}
+
+.scan-sheet.show { opacity: 1; transform: none; }
+
+.scan-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: calc(env(safe-area-inset-top) + 10px) 10px 10px 16px;
+  background: rgba(15, 17, 21, .9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+
+.scan-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-icon-btn {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: background .15s var(--ease), color .15s var(--ease);
+}
+
+.scan-icon-btn:active { background: var(--card-hover); color: var(--text); }
+.scan-icon-btn svg { width: 20px; height: 20px; }
+
+.scan-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px 16px 8px;
+}
+
+.scan-foot {
+  flex: none;
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(15, 17, 21, .9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line);
+}
+
+.scan-foot .btn,
+.scan-foot .btn-ghost { flex: 1; height: 48px; }
+
+/* inline progress island */
+
+.scan-progress {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 26px 4px 18px;
+}
+
+.scan-prog-info { flex: 1; min-width: 0; }
+
+.scan-lbl {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.scan-lbl #scan-pct { color: var(--accent2); font-variant-numeric: tabular-nums; }
+
+.scan-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .08);
+  overflow: hidden;
+}
+
+.scan-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 4px;
+  background: var(--grad);
+  transition: width .4s var(--ease);
+}
+
+/* OpenAPI enrichment hint (only when already configured) */
+
+.scan-oa {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 4px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.scan-oa .scan-oa-txt { font-size: 12px; }
+
+/* empty / error states */
+
+.scan-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 64px 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.scan-empty-ico svg { width: 44px; height: 44px; opacity: .5; }
+.scan-empty-ico.err svg { color: var(--err); opacity: .8; }
+
+.scan-empty span { font-size: 14px; line-height: 1.5; max-width: 280px; }
+
+.scan-empty .btn-ghost { width: auto; min-width: 170px; }
+
+/* candidate rows */
+
+.cand-list { display: flex; flex-direction: column; gap: 12px; }
+
+.cand {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: opacity .2s var(--ease);
+}
+
+/* zero-entity rule visual: checked but nothing to commit (gray + excluded) */
+.cand.zero { opacity: .45; }
+
+.cand-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 10px 8px 10px 12px;
+}
+
+.cand-check {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+}
+
+.cand-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  padding: 6px 4px;
+}
+
+.cand-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  word-break: break-word;
+}
+
+.cand-badge {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(139, 148, 167, .16);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  flex: none;
+}
+
+.cand-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cand-online {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--offline);
+}
+
+.cand-online.on { background: var(--ok); box-shadow: 0 0 6px rgba(52, 211, 153, .5); }
+
+.cand-chev {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.cand-chev svg { width: 17px; height: 17px; transition: transform .18s var(--ease); }
+
+.cand.open .cand-chev svg { transform: rotate(180deg); }
+
+.cand-ents { border-top: 1px solid var(--line); padding: 2px 14px 10px; }
+
+.cand-ents.hide { display: none; }
+
+.ent-all {
+  width: 100%;
+  min-height: 42px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent2);
+  text-align: left;
+  display: flex;
+  align-items: center;
+}
+
+.ent-all:active { opacity: .7; }
+
+/* entity rows (shared by the candidate checklist and the editor dialog) */
+
+.ent-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  cursor: pointer;
+}
+
+.ent-row:last-child { border-bottom: none; }
+
+.ent-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.ent-name {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ent-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ent-w {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, .16);
+  color: #a5b0ff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .3px;
+}
+
+/* ---------- entity editor dialog (scrollable .dlg) ---------- */
+
+.ent-dlg {
+  max-width: 400px;
+  max-height: min(82vh, 620px);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 12px 14px;
+}
+
+.ent-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 10px;
+}
+
+.ent-head h3 {
+  flex: 1;
+  min-width: 0;
+  font-size: 16.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ent-close {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.ent-close:active { background: var(--card-hover); color: var(--text); }
+.ent-close svg { width: 19px; height: 19px; }
+
+.ent-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 4px 8px;
+}
+
+.ent-hint { padding: 10px 4px 6px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+.ent-loading { display: flex; justify-content: center; padding: 48px 0; }
+
+.ent-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.ent-foot .btn,
+.ent-foot .btn-danger { height: 46px; }
+

@@ -1,0 +1,10 @@
+dependencies:
+  espressif/cjson:
+    version: "^1.7.19"
+    # Private: public headers are cJSON-free; only src/*.cc include <cJSON.h>.
+    require: private
+  joltwallet/littlefs:
+    version: "^1.23.0"
+    # DeviceStore flash persistence on the "storage" partition. Private:
+    # only src/device_store.cc includes <esp_littlefs.h>.
+    require: private

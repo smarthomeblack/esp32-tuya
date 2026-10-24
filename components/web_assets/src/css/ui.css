@@ -1,0 +1,25 @@
+/* Misc: spinner, hover states, reduced motion. */
+
+.spin {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, .12);
+  border-top-color: var(--accent);
+  animation: rot 1s linear infinite;
+}
+
+.mt { margin-top: 16px; }
+
+@media (hover: hover) {
+  .card:hover { background: var(--card-hover); }
+  .home-btn:hover { background: var(--card-hover); }
+  .home-menu button:hover { background: var(--card-hover); }
+  .chip:not(.active):hover { background: rgba(255, 255, 255, .1); }
+  .cover-btn:hover { background: var(--card-hover); }
+  .row.click:hover { background: var(--card-hover); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
