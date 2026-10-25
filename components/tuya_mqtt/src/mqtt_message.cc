@@ -319,16 +319,19 @@ void ApplyDeviceReport(const MqttMessage& msg, std::string_view topic) {
         if (item.has_dp_id) {
             std::string code;
             hub_core::DpValue value;
-            if (!hub_core::ConvertDpReport(device.id, device.local_strategy, device.status_range,
-                                           item.dp_id, item.value, code, value)) {
+            if (hub_core::ConvertDpReport(device.id, device.local_strategy, device.status_range,
+                                          item.dp_id, item.value, code, value)) {
+                registry.UpdateStatus(msg.dev_id, code, value, item.t);
+                continue;
+            }
+            // An item can carry both keys: never lose an update we can apply.
+            if (!item.has_code) {
                 if (s_dp_warned.insert({msg.dev_id, item.dp_id}).second) {
                     ESP_LOGW(TAG, "dev=%s dpId=%d report dropped (no usable strategy)",
                              msg.dev_id.c_str(), item.dp_id);
                 }
                 continue;
             }
-            registry.UpdateStatus(msg.dev_id, code, value, item.t);
-            continue;
         }
         if (item.has_code) {
             registry.UpdateStatus(msg.dev_id, item.code, item.value, item.t);

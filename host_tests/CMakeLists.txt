@@ -50,7 +50,7 @@ set(COMPONENT_SRCS
     # sys — real Settings code over the in-memory NVS shim
     ../components/sys/src/settings.cc
 
-    # tuya_mqtt — MQTT message suite (110)
+    # tuya_mqtt — MQTT message suite (114)
     ../components/tuya_mqtt/src/mqtt_message.cc
     ../components/tuya_mqtt/src/mqtt_message_test.cc
 

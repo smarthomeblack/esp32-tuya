@@ -53,7 +53,7 @@ Two mandatory UI rules:
 
 Read [docs/testing.md](docs/testing.md) — all the self-test gates, the mock server, and golden vectors.
 
-- **Firmware changes**: must pass the full boot self-test on real hardware before you send the PR (949/949 checks — a failed self-test keeps the hub off the network; details in docs/testing.md).
+- **Firmware changes**: must pass the full boot self-test on real hardware before you send the PR (953/953 checks — a failed self-test keeps the hub off the network; details in docs/testing.md).
 - **Web UI changes**: QA on the mock server (`python scripts/mock_server.py`) — no real hub needed.
 - **Regenerating golden vectors** (`python scripts/gen_test_vectors.py`) needs the repo's one Python dependency: `pip install -r scripts/requirements.txt`.
 

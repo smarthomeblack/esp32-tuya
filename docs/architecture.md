@@ -116,7 +116,7 @@ Understanding this flow means understanding almost the entire runtime architectu
 
 ## Self-test gate
 
-Every component has its own self-test file (`self_test.cc`/`*_test.cc` in src). At boot, `main/boot_self_test.cc` runs the full gate chain in order: crypto → sys → cloud pipeline → Tuya IoT client → device model → device store → enrichment → MQTT message → command service → discovery → web assets. 949 checks in total, running **before** the hub touches the network.
+Every component has its own self-test file (`self_test.cc`/`*_test.cc` in src). At boot, `main/boot_self_test.cc` runs the full gate chain in order: crypto → sys → cloud pipeline → Tuya IoT client → device model → device store → enrichment → MQTT message → command service → discovery → web assets. 953 checks in total, running **before** the hub touches the network.
 
 - Any failed check → the hub enters the `FatalError` state, fast-blinking LED, **no WiFi/MQTT connection** — broken firmware never gets out onto the home network. The OTA rollback window stays open (the new app is not confirmed), so the next boot has the bootloader roll back to the previous image.
 - All pass → only then is `esp_ota_mark_app_valid_cancel_rollback()` called — confirming the new app as valid and closing the rollback window.
@@ -124,7 +124,7 @@ Every component has its own self-test file (`self_test.cc`/`*_test.cc` in src). 
 
 Consequences for contributors:
 
-- A PR touching firmware must pass 949/949 on real hardware before being sent — see [docs/testing.md](testing.md) (a detailed table of each gate, how to read the log when it fails, the mock server).
+- A PR touching firmware must pass 953/953 on real hardware before being sent — see [docs/testing.md](testing.md) (a detailed table of each gate, how to read the log when it fails, the mock server).
 - New logic means adding matching checks to that component's self-test; never lower the bar.
 
 ## Web UI

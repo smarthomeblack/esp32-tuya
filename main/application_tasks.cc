@@ -86,10 +86,12 @@ void Application::RunCloudBootRetry() {
 void Application::SchedulePresenceRefresh() {
     // The dispatcher owns the cadence: a leftover burst slot polls in 1 s,
     // otherwise the background (backoff-aware) interval applies.
-    const bool burst = presence_burst_left_.load() > 0;
-    if (burst) {
-        presence_burst_left_.fetch_sub(1);
+    // The 1 Hz tick and the command hook both schedule here: a load-then-decrement
+    // could underflow the counter and poll every second forever.
+    uint32_t left = presence_burst_left_.load();
+    while (left > 0 && !presence_burst_left_.compare_exchange_weak(left, left - 1)) {
     }
+    const bool burst = left > 0;
     const int64_t interval_ms = burst ? kPresenceBurstSpacingMs : presence_interval_ms_.load();
     presence_next_poll_ms_.store(static_cast<int64_t>(sys::SystemInfo::GetUptimeMs()) +
                                  interval_ms);
@@ -142,6 +144,13 @@ void Application::PresencePollRecovered() {
     presence_interval_ms_.store(kPresencePollMs);
     const uint32_t failures = presence_failures_.exchange(0);
     if (failures != 0) {
+        // Shrink the backed-off deadline, but never overwrite a concurrently
+        // scheduled 1 s burst deadline.
+        const int64_t wanted =
+            static_cast<int64_t>(sys::SystemInfo::GetUptimeMs()) + kPresencePollMs;
+        int64_t next = presence_next_poll_ms_.load();
+        while (next > wanted && !presence_next_poll_ms_.compare_exchange_weak(next, wanted)) {
+        }
         ESP_LOGI(TAG, "Presence poll recovered after %u failure(s) — interval back to %u s",
                  static_cast<unsigned>(failures), static_cast<unsigned>(kPresencePollMs / 1000));
     }

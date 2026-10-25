@@ -145,6 +145,26 @@ constexpr const char* kReportMixedJson = "{"
                                          "}"
                                          "}";
 
+/// protocol 4, one item carrying both keys where dpId 99 has no strategy.
+constexpr const char* kReportBothKeysJson =
+    "{"
+    "\"protocol\": 4, "
+    "\"data\": {"
+    "\"devId\": \"selftest-mqtt-both\", "
+    "\"status\": [{\"dpId\": 99, \"code\": \"switch_led\", \"value\": true, "
+    "\"t\": 1752456620600}]"
+    "}"
+    "}";
+
+/// protocol 4, an unconvertible dpId with no code fallback available.
+constexpr const char* kReportBadDpJson = "{"
+                                         "\"protocol\": 4, "
+                                         "\"data\": {"
+                                         "\"devId\": \"selftest-mqtt-baddp\", "
+                                         "\"status\": [{\"dpId\": 99, \"value\": true}]"
+                                         "}"
+                                         "}";
+
 /// protocol 20 online / offline / delete / bindUser / dpNameUpdate.
 constexpr const char* kEventOnlineJson =
     "{\"protocol\": 20, \"data\": {\"bizCode\": \"online\", \"bizData\": {\"devId\": "
@@ -463,10 +483,31 @@ void TestApplyReportShape(TestResult& r) {
                   stored.status["bright_value"].type == hub_core::DpValue::Type::kDouble &&
                   stored.status["bright_value"].d == 25.5);
 
+    // (e) Item with both keys: dpId 99 has no strategy, so the code must apply.
+    registry.UpsertDevice(MakeReportDevice("selftest-mqtt-both", true));
+    MqttMessage both_msg;
+    CheckTrue(r, "apply.both_keys.parse", ParseMsg(kReportBothKeysJson, both_msg));
+    ApplyDeviceReport(both_msg, "cloud/mix/d/selftest-mqtt-both/pen");
+    CheckTrue(r, "apply.both_keys.code_fallback",
+              registry.GetDevice("selftest-mqtt-both", stored) &&
+                  stored.status.count("switch_led") == 1 && stored.status["switch_led"].b);
+
+    // (f) Unconvertible dpId with no code: dropped, the status stays untouched.
+    registry.UpsertDevice(MakeReportDevice("selftest-mqtt-baddp", true));
+    MqttMessage bad_msg;
+    CheckTrue(r, "apply.bad_dpid.parse", ParseMsg(kReportBadDpJson, bad_msg));
+    ApplyDeviceReport(bad_msg, "cloud/mix/d/selftest-mqtt-baddp/pen");
+    CheckTrue(r, "apply.bad_dpid.no_update",
+              registry.GetDevice("selftest-mqtt-baddp", stored) && stored.status.size() == 1 &&
+                  stored.status.count("switch_1") == 1 && !stored.status["switch_1"].b &&
+                  stored.dp_timestamps.empty());
+
     CheckTrue(r, "apply.cleanup",
               registry.RemoveDevice("selftest-mqtt-code") &&
                   registry.RemoveDevice("selftest-mqtt-dp") &&
-                  registry.RemoveDevice("selftest-mqtt-mixed"));
+                  registry.RemoveDevice("selftest-mqtt-mixed") &&
+                  registry.RemoveDevice("selftest-mqtt-both") &&
+                  registry.RemoveDevice("selftest-mqtt-baddp"));
 }
 
 void TestReassembly(TestResult& r) {

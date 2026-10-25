@@ -14,7 +14,7 @@
 - 📡 **mDNS** — reach the hub at `http://tuyahub-<4hex>.local`, no need to remember an IP.
 - 📶 **First-time AP provisioning** — the hub broadcasts a `TuyaHub-XXXX` setup AP + captive portal (DNS hijack) for entering WiFi, no screen or cable needed.
 - ♻️ **Factory reset / reboot** — from the Settings page (wipes all saved settings — WiFi including the setup-AP password, account link, device list, API key — then restarts).
-- 🧪 **Boot self-test** — 949 checks run before the hub goes online; a failure keeps it offline.
+- 🧪 **Boot self-test** — 953 checks run before the hub goes online; a failure keeps it offline.
 - 💾 **Coredump** — when the firmware crashes, the crash details are stored in a dedicated memory region (64 KB) for later debugging.
 
 ## 🧭 Architecture overview
