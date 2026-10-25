@@ -134,7 +134,21 @@ CommandResult CommandService::SendDeviceCommands(const std::string& dev_id,
     ESP_LOGI(TAG, "commands sent: dev=%s count=%u (sharing=%u tuya_iot=%u)", dev_id.c_str(),
              static_cast<unsigned>(commands.size()), static_cast<unsigned>(sharing_cmds.size()),
              static_cast<unsigned>(openapi_cmds.size()));
+    // Notify from a copy: the hook runs outside mutex_ and may call back in.
+    std::function<void()> hook;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        hook = command_sent_hook_;
+    }
+    if (hook) {
+        hook();
+    }
     return CommandResult::kSent;
+}
+
+void CommandService::SetCommandSentHook(std::function<void()> hook) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    command_sent_hook_ = std::move(hook);
 }
 
 void CommandService::ForgetDedupEntry(const std::string& dev_id) {

@@ -100,7 +100,7 @@ The cloud HTTP leg has a 60-second timeout and no internal retry; a command chai
 - On timeout → return **504 Gateway Timeout**. Behind the scenes the job keeps running: the worker task finishes its work before releasing; a main-loop job stays in the queue — but if the queue overloads, that job may never run (drop-oldest). A retrying client sees the new state.
 - A web-requested reboot also goes through a dedicated task, delayed by one tick so the response can reach the client — never `esp_restart()` right inside a handler.
 
-**One-shot tasks** (spawn → run → self-delete): `tuya_presence` (refreshes the online flags right after MQTT connects), `tuya_scenes` (fetches the scene list), `tuya_cloudboot` (cloud boot retry — blocks for minutes), `web_worker`, `hub_web_reboot`. Their results return to the main loop via a listener + `Schedule()`.
+**One-shot tasks** (spawn → run → self-delete): `tuya_presence` (fetches the cloud device list at boot, every 10 seconds while linked — 30/60/120-second backoff on failure — and five 1-second polls after a successful command; it heals both the online flags and the DP status, and its room sweep rides along at most every 5 minutes), `tuya_scenes` (fetches the scene list), `tuya_cloudboot` (cloud boot retry — blocks for minutes), `web_worker`, `hub_web_reboot`. Their results return to the main loop via a listener + `Schedule()`.
 
 **Follow one control command end to end** — assembling all the rules above:
 
@@ -110,11 +110,13 @@ The cloud HTTP leg has a 60-second timeout and no internal retry; a command chai
 4. The device receives the command → reports new state → MQTT pushes it into the registry → the registry fires an event → the main loop broadcasts `device_update` over WS.
 5. The UI receives the event, patches the card in place and clears *pending*. If the cloud returns an error, REST returns 502 with details; past the 25-second wait, 504 — the command may still complete in the background.
 
+A sharing session does not always deliver those pushes, so the receive path is **not MQTT-only**: `tuya_presence` polls the cloud device list (10 seconds while linked, five 1-second polls right after a successful command) and applies the same registry updates, so a card still converges when nothing is pushed.
+
 Understanding this flow means understanding almost the entire runtime architecture of the hub.
 
 ## Self-test gate
 
-Every component has its own self-test file (`self_test.cc`/`*_test.cc` in src). At boot, `main/boot_self_test.cc` runs the full gate chain in order: crypto → sys → cloud pipeline → Tuya IoT client → device model → device store → enrichment → MQTT message → command service → discovery → web assets. 930 checks in total, running **before** the hub touches the network.
+Every component has its own self-test file (`self_test.cc`/`*_test.cc` in src). At boot, `main/boot_self_test.cc` runs the full gate chain in order: crypto → sys → cloud pipeline → Tuya IoT client → device model → device store → enrichment → MQTT message → command service → discovery → web assets. 949 checks in total, running **before** the hub touches the network.
 
 - Any failed check → the hub enters the `FatalError` state, fast-blinking LED, **no WiFi/MQTT connection** — broken firmware never gets out onto the home network. The OTA rollback window stays open (the new app is not confirmed), so the next boot has the bootloader roll back to the previous image.
 - All pass → only then is `esp_ota_mark_app_valid_cancel_rollback()` called — confirming the new app as valid and closing the rollback window.
@@ -122,7 +124,7 @@ Every component has its own self-test file (`self_test.cc`/`*_test.cc` in src). 
 
 Consequences for contributors:
 
-- A PR touching firmware must pass 930/930 on real hardware before being sent — see [docs/testing.md](testing.md) (a detailed table of each gate, how to read the log when it fails, the mock server).
+- A PR touching firmware must pass 949/949 on real hardware before being sent — see [docs/testing.md](testing.md) (a detailed table of each gate, how to read the log when it fails, the mock server).
 - New logic means adding matching checks to that component's self-test; never lower the bar.
 
 ## Web UI

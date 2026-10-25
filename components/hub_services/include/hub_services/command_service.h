@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -83,6 +84,10 @@ public:
     CommandResult SendDeviceCommands(const std::string& dev_id,
                                      const std::vector<DeviceCommand>& commands);
 
+    /// Installs the callback fired ONCE after a fully successful send (both
+    /// legs); never on error or dedup suppression. Runs on the sending thread.
+    void SetCommandSentHook(std::function<void()> hook);
+
     /// Fetches scenes for all homes, REPLACING the cache; ok is false only
     /// when every home failed. A ClearScenes() during the fetch discards the result.
     SceneFetchResult FetchScenes();
@@ -113,6 +118,10 @@ private:
     std::vector<Scene> scenes_;
     /// Bumped by ClearScenes(); a fetch started under an older value is discarded.
     std::atomic<uint32_t> scenes_generation_{0};
+
+    /// Post-send notifier (see SetCommandSentHook); guarded by mutex_ so the
+    /// sender thread never reads a torn std::function.
+    std::function<void()> command_sent_hook_;
 
     // ---- OpenAPI command path ----
 

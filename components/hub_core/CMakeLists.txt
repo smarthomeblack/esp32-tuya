@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "src/device_registry.cc"
+        "src/presence_status.cc"
         "src/psram_resource.cc"
         "src/strategies.cc"
         "src/parse_helpers.cc"

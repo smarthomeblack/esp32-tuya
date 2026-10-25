@@ -12,7 +12,9 @@
 
 #include "hub_core/device_registry.h"
 #include "hub_core/parse.h"
+#include "hub_core/presence_status.h"
 #include "hub_services/command_service.h"
+#include "sys/system_info.h"
 #include "tuya_cloud/api_response.h"
 #include "tuya_cloud/constants.h"
 #include "tuya_cloud/customer_api.h"
@@ -82,6 +84,15 @@ void Application::RunCloudBootRetry() {
 }
 
 void Application::SchedulePresenceRefresh() {
+    // The dispatcher owns the cadence: a leftover burst slot polls in 1 s,
+    // otherwise the background (backoff-aware) interval applies.
+    const bool burst = presence_burst_left_.load() > 0;
+    if (burst) {
+        presence_burst_left_.fetch_sub(1);
+    }
+    const int64_t interval_ms = burst ? kPresenceBurstSpacingMs : presence_interval_ms_.load();
+    presence_next_poll_ms_.store(static_cast<int64_t>(sys::SystemInfo::GetUptimeMs()) +
+                                 interval_ms);
     // Spawn the one-shot "tuya_presence" task; guards keep it single-flight.
     if (hub_core::DeviceRegistry::GetInstance().Count() == 0) {
         ESP_LOGD(TAG, "Presence refresh skipped — registry is empty");
@@ -89,7 +100,7 @@ void Application::SchedulePresenceRefresh() {
     }
     bool expected = false;
     if (!presence_refresh_running_.compare_exchange_strong(expected, true)) {
-        return;  // a refresh is already in flight
+        return;  // a refresh is already in flight — its slot is spent, not retried
     }
     const BaseType_t ok = xTaskCreate(PresenceRefreshTask, "tuya_presence", kPresenceTaskStackBytes,
                                       this, kPresenceTaskPriority, nullptr);
@@ -101,11 +112,39 @@ void Application::SchedulePresenceRefresh() {
     }
 }
 
+void Application::SchedulePresenceBurst() {
+    // A sent command moved the cloud state: confirm with 5 polls one second apart.
+    presence_burst_left_.store(kPresenceBurstCount);
+    SchedulePresenceRefresh();
+}
+
 void Application::PresenceRefreshTask(void* arg) {
     auto* app = static_cast<Application*>(arg);
     app->RunPresenceRefresh();
     app->presence_refresh_running_.store(false);
     vTaskDelete(nullptr);
+}
+
+void Application::PresencePollFailed(const char* why) {
+    const uint32_t failures = presence_failures_.load() + 1;
+    presence_failures_.store(failures);
+    const int64_t interval_ms = PresenceBackoffMs(failures);
+    presence_interval_ms_.store(interval_ms);
+    // Hammering a failing endpoint helps nobody: the backoff owns recovery.
+    presence_burst_left_.store(0);
+    presence_next_poll_ms_.store(static_cast<int64_t>(sys::SystemInfo::GetUptimeMs()) +
+                                 interval_ms);
+    ESP_LOGW(TAG, "Presence poll failed (%s) — retry in %u s (failure %u)", why,
+             static_cast<unsigned>(interval_ms / 1000), static_cast<unsigned>(failures));
+}
+
+void Application::PresencePollRecovered() {
+    presence_interval_ms_.store(kPresencePollMs);
+    const uint32_t failures = presence_failures_.exchange(0);
+    if (failures != 0) {
+        ESP_LOGI(TAG, "Presence poll recovered after %u failure(s) — interval back to %u s",
+                 static_cast<unsigned>(failures), static_cast<unsigned>(kPresencePollMs / 1000));
+    }
 }
 
 void Application::RunPresenceRefresh() {
@@ -120,23 +159,24 @@ void Application::RunPresenceRefresh() {
         return;
     }
 
-    size_t matched = 0;  // registry devices seen in the cloud lists
-    size_t online = 0;   // of those, currently online per the API
+    size_t matched = 0;    // registry devices seen in the cloud lists
+    size_t online = 0;     // of those, currently online per the API
+    size_t applied = 0;    // status codes whose value actually moved
+    size_t unchanged = 0;  // codes the cloud repeated (or that are disabled)
     for (const hub_core::Home& home : homes) {
-        // One attempt; the next MQTT connect retries.
+        // One attempt; the backoff retry is armed by PresencePollFailed.
         tuya_cloud::ApiResponse resp =
             api.Request(tuya_cloud::HttpMethod::kGet, tuya_cloud::kPathDevicesByHome,
                         tuya_cloud::HomeIdParams(home.id), "");
         if (!resp.ok) {
-            ESP_LOGW(TAG,
-                     "Presence refresh: home %s device list failed (%s) — giving up this round",
-                     home.id.c_str(), resp.msg.c_str());
+            ESP_LOGW(TAG, "Presence poll: home %s device list failed (%s)", home.id.c_str(),
+                     resp.msg.c_str());
+            PresencePollFailed("device list unreachable");
             return;
         }
         if (!cJSON_IsArray(resp.result)) {
-            ESP_LOGW(TAG,
-                     "Presence refresh: home %s result is not a JSON array — giving up this round",
-                     home.id.c_str());
+            ESP_LOGW(TAG, "Presence poll: home %s result is not a JSON array", home.id.c_str());
+            PresencePollFailed("unexpected result shape");
             return;
         }
         for (const cJSON* item = resp.result->child; item != nullptr; item = item->next) {
@@ -153,12 +193,25 @@ void Application::RunPresenceRefresh() {
                     ++online;
                 }
             }
+            const hub_core::PresenceApplyResult merged =
+                hub_core::ApplyPresenceStatus(registry, device);
+            applied += merged.applied;
+            unchanged += merged.unchanged;
         }
     }
+    PresencePollRecovered();
+    ESP_LOGI(TAG, "presence poll: %u code(s) applied, %u unchanged, interval=%u s",
+             static_cast<unsigned>(applied), static_cast<unsigned>(unchanged),
+             static_cast<unsigned>(presence_interval_ms_.load() / 1000));
     ESP_LOGI(TAG, "presence refresh: %u/%u device(s) online", static_cast<unsigned>(online),
              static_cast<unsigned>(matched));
-    // Rooms ride along after presence; fire-and-forget, this task never waits for it.
-    ScheduleRoomRefresh();
+    // Rooms ride along at most every 5 min: the presence poll is 10 s and a
+    // room sweep costs 1 + N OpenAPI calls. On-demand refresh bypasses this.
+    const int64_t now_ms = static_cast<int64_t>(sys::SystemInfo::GetUptimeMs());
+    if (now_ms >= room_next_poll_ms_.load()) {
+        room_next_poll_ms_.store(now_ms + kRoomPollMs);
+        ScheduleRoomRefresh();  // fire-and-forget, this task never waits for it
+    }
 }
 
 void Application::ScheduleSceneFetch() {

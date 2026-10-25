@@ -29,6 +29,27 @@ struct MqttStatus;  // tuya_mqtt/tuya_mqtt_client.h
 /// MQTT push self-heal: first retry 5 s after a refused Start().
 constexpr int64_t kMqttPushRetryFirstMs = 5000;
 
+/// Presence + status poll cadence while linked: the push feed can be silently
+/// blind on an account, so the cloud device list is the only reliable source.
+constexpr int64_t kPresencePollMs = 10 * 1000;
+/// Post-command burst: kPresenceBurstCount polls spaced kPresenceBurstSpacingMs.
+constexpr int64_t kPresenceBurstSpacingMs = 1000;
+constexpr uint32_t kPresenceBurstCount = 5;
+/// Poll backoff after consecutive failures (cap = last entry), reset on success.
+constexpr int64_t kPresenceBackoffMs[] = {30000, 60000, 120000};
+/// Room sweep ride-along: the Tuya IoT room list costs 1 + N OpenAPI calls.
+constexpr int64_t kRoomPollMs = 5 * 60 * 1000;
+
+/// Background interval for `failures` consecutive failed polls.
+constexpr int64_t PresenceBackoffMs(uint32_t failures) {
+    constexpr size_t kSteps = sizeof(kPresenceBackoffMs) / sizeof(kPresenceBackoffMs[0]);
+    if (failures == 0) {
+        return kPresencePollMs;
+    }
+    const size_t step = failures < kSteps ? failures - 1 : kSteps - 1;
+    return kPresenceBackoffMs[step];
+}
+
 /// Hub application core: singleton owning the main event loop task.
 /// All cross-task work is marshalled onto the loop via Schedule().
 class Application {
@@ -97,8 +118,15 @@ private:
     /// Queues the one-shot presence refresh once per MQTT connect. Main loop only.
     void SchedulePresenceRefresh();
 
-    /// Heals registry online flags from the cloud; runs on the "tuya_presence" task.
+    /// Arms the 5-poll 1 s burst after a successful command (any task).
+    void SchedulePresenceBurst();
+
+    /// Heals registry online flags + status from the cloud; runs on "tuya_presence".
     void RunPresenceRefresh();
+
+    /// Applies the poll backoff (burst cleared) or the recovery reset.
+    void PresencePollFailed(const char* why);
+    void PresencePollRecovered();
 
     static void PresenceRefreshTask(void* arg);
 
@@ -211,6 +239,14 @@ private:
     std::atomic<bool> mqtt_resubscribe_pending_{false};
     // Single-flight latch of the presence-refresh task.
     std::atomic<bool> presence_refresh_running_{false};
+    // Presence poll cadence state. Atomic: the command hook arms the burst from
+    // the worker task, the tick and the poll task touch the rest.
+    std::atomic<int64_t> presence_next_poll_ms_{0};
+    std::atomic<uint32_t> presence_burst_left_{0};
+    std::atomic<int64_t> presence_interval_ms_{kPresencePollMs};
+    std::atomic<uint32_t> presence_failures_{0};
+    // Next room-sweep deadline; the 10 s presence poll may only take its turn.
+    std::atomic<int64_t> room_next_poll_ms_{0};
     // Single-flight latch of the scene-fetch task.
     std::atomic<bool> scene_fetch_running_{false};
     // Single-flight latch of the room-refresh task.

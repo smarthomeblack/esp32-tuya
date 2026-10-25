@@ -6,6 +6,8 @@
 #include <cstring>
 #include <string>
 
+#include "hub_core/device.h"
+#include "hub_core/device_registry.h"
 #include "hub_core/dp_value.h"
 #include "mqtt_message.h"
 #include "tuya_mqtt/tuya_mqtt_client.h"
@@ -107,6 +109,41 @@ constexpr const char* kReportNonLocalJson =
 /// protocol 4 with a missing devId — parse must fail.
 constexpr const char* kReportNoDevIdJson =
     "{\"protocol\": 4, \"data\": {\"status\": [{\"code\": \"switch_led\", \"value\": true}]}}";
+
+/// protocol 4, code-only items on a support_local device (the /sta form).
+constexpr const char* kReportCodeOnlyJson =
+    "{"
+    "\"protocol\": 4, "
+    "\"data\": {"
+    "\"devId\": \"selftest-mqtt-code\", "
+    "\"status\": ["
+    "{\"code\": \"switch_led\", \"value\": true, \"t\": 1752456620500},"
+    "{\"code\": \"work_mode\", \"value\": \"white\"}"
+    "]"
+    "}"
+    "}";
+
+/// protocol 4, raw dpId item only (the /pen form).
+constexpr const char* kReportDpOnlyJson =
+    "{"
+    "\"protocol\": 4, "
+    "\"data\": {"
+    "\"devId\": \"selftest-mqtt-dp\", "
+    "\"status\": [{\"dpId\": 20, \"value\": true, \"t\": 1752456620499}]"
+    "}"
+    "}";
+
+/// protocol 4, both forms in one message.
+constexpr const char* kReportMixedJson = "{"
+                                         "\"protocol\": 4, "
+                                         "\"data\": {"
+                                         "\"devId\": \"selftest-mqtt-mixed\", "
+                                         "\"status\": ["
+                                         "{\"dpId\": 20, \"value\": true, \"t\": 1752456620499},"
+                                         "{\"code\": \"bright_value\", \"value\": 25.5}"
+                                         "]"
+                                         "}"
+                                         "}";
 
 /// protocol 20 online / offline / delete / bindUser / dpNameUpdate.
 constexpr const char* kEventOnlineJson =
@@ -357,6 +394,79 @@ void TestTopics(TestResult& r) {
                DeviceTopic("cloud/mix/d/{devId}", "6cd4a1f9d0", false));
     // Repeated placeholders: all occurrences replaced.
     CheckEqStr(r, "topic.dev_repeat", "d/x/y/x/pen", DeviceTopic("d/{devId}/y/{devId}", "x", true));
+    // Both suffixes exist per device and stay distinguishable.
+    const std::string pen = DeviceTopic("cloud/mix/d/{devId}", "6cd4a1f9c9abc", true);
+    const std::string sta = DeviceTopic("cloud/mix/d/{devId}", "6cd4a1f9c9abc", false);
+    CheckTrue(r, "topic.dev_both_forms",
+              pen != sta && pen.ends_with("/pen") && sta.ends_with("/sta"));
+}
+
+/// Registry entry for the report-dispatch tests: dp 20 maps to switch_1
+/// through the default strategy.
+hub_core::Device MakeReportDevice(const char* id, bool support_local) {
+    hub_core::Device device;
+    device.id = id;
+    device.name = "Report Device";
+    device.set_up = true;
+    device.support_local = support_local;
+    hub_core::StrategyConfig strategy;
+    strategy.dp_id = 20;
+    strategy.support_local = true;
+    strategy.value_convert = "default";
+    strategy.status_code = "switch_1";
+    strategy.status_format_json = "{\"switch_1\":\"\"}";
+    strategy.value_type = "Boolean";
+    device.local_strategy[20] = strategy;
+    device.status["switch_1"] = hub_core::DpValue::FromBool(false);
+    return device;
+}
+
+/// Dispatch keys on the item shape: code-only items are applied even on a
+/// support_local device, and dpId items still go through the strategy.
+void TestApplyReportShape(TestResult& r) {
+    hub_core::DeviceRegistry& registry = hub_core::DeviceRegistry::GetInstance();
+
+    // (b) Code-only report on a support_local device (arrives on "/sta").
+    registry.UpsertDevice(MakeReportDevice("selftest-mqtt-code", true));
+    MqttMessage msg;
+    CheckTrue(r, "apply.code_only.parse", ParseMsg(kReportCodeOnlyJson, msg));
+    ApplyDeviceReport(msg, "cloud/mix/d/selftest-mqtt-code/sta");
+    hub_core::Device stored;
+    CheckTrue(r, "apply.code_only.bool_applied",
+              registry.GetDevice("selftest-mqtt-code", stored) &&
+                  stored.status.count("switch_led") == 1 && stored.status["switch_led"].b);
+    CheckTrue(r, "apply.code_only.string_applied",
+              stored.status.count("work_mode") == 1 && stored.status["work_mode"].s == "white");
+    CheckEqInt(r, "apply.code_only.timestamp", 1752456620500,
+               stored.dp_timestamps.count("switch_led") == 1 ? stored.dp_timestamps["switch_led"]
+                                                             : 0);
+
+    // (c) dpId report: converted to switch_1 by the default strategy.
+    registry.UpsertDevice(MakeReportDevice("selftest-mqtt-dp", true));
+    MqttMessage dp_msg;
+    CheckTrue(r, "apply.dpid.parse", ParseMsg(kReportDpOnlyJson, dp_msg));
+    ApplyDeviceReport(dp_msg, "cloud/mix/d/selftest-mqtt-dp/pen");
+    CheckTrue(r, "apply.dpid.converted",
+              registry.GetDevice("selftest-mqtt-dp", stored) &&
+                  stored.status.count("switch_1") == 1 && stored.status["switch_1"].b);
+
+    // (d) Mixed report: the dpId item converts, the code item applies as-is.
+    registry.UpsertDevice(MakeReportDevice("selftest-mqtt-mixed", true));
+    MqttMessage mixed_msg;
+    CheckTrue(r, "apply.mixed.parse", ParseMsg(kReportMixedJson, mixed_msg));
+    ApplyDeviceReport(mixed_msg, "cloud/mix/d/selftest-mqtt-mixed/sta");
+    CheckTrue(r, "apply.mixed.dpid_applied",
+              registry.GetDevice("selftest-mqtt-mixed", stored) &&
+                  stored.status.count("switch_1") == 1 && stored.status["switch_1"].b);
+    CheckTrue(r, "apply.mixed.code_applied",
+              stored.status.count("bright_value") == 1 &&
+                  stored.status["bright_value"].type == hub_core::DpValue::Type::kDouble &&
+                  stored.status["bright_value"].d == 25.5);
+
+    CheckTrue(r, "apply.cleanup",
+              registry.RemoveDevice("selftest-mqtt-code") &&
+                  registry.RemoveDevice("selftest-mqtt-dp") &&
+                  registry.RemoveDevice("selftest-mqtt-mixed"));
 }
 
 void TestReassembly(TestResult& r) {
@@ -404,6 +514,7 @@ bool RunMqttMessageSelfTest() {
     TestParseConfig(r);
     TestTranslateUri(r);
     TestTopics(r);
+    TestApplyReportShape(r);
     TestReassembly(r);
 
     if (r.passed == r.total) {

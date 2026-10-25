@@ -50,11 +50,11 @@ set(COMPONENT_SRCS
     # sys — real Settings code over the in-memory NVS shim
     ../components/sys/src/settings.cc
 
-    # tuya_mqtt — MQTT message suite (99)
+    # tuya_mqtt — MQTT message suite (110)
     ../components/tuya_mqtt/src/mqtt_message.cc
     ../components/tuya_mqtt/src/mqtt_message_test.cc
 
-    # hub_core — model (153), store (64)
+    # hub_core — model (172), store (64)
     ../components/hub_core/src/device_registry.cc
     ../components/hub_core/src/device_store_format.cc
     ../components/hub_core/src/device_store_test.cc
@@ -62,9 +62,10 @@ set(COMPONENT_SRCS
     ../components/hub_core/src/model_self_test.cc
     ../components/hub_core/src/parse.cc
     ../components/hub_core/src/parse_helpers.cc
+    ../components/hub_core/src/presence_status.cc
     ../components/hub_core/src/strategies.cc
 
-    # hub_services — command (214), enrich (87), discovery (90)
+    # hub_services — command (219), enrich (87), discovery (90)
     ../components/hub_services/src/command_service.cc
     ../components/hub_services/src/command_service_test.cc
     ../components/hub_services/src/dedup_filter.cc

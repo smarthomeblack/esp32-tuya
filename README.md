@@ -1,6 +1,6 @@
 # ESP32-Tuya Smart Home Hub
 
-**A self-contained Tuya hub running on a single ESP32-S3 board.** Account authentication via Device Sharing (scan a QR code with the Smart Life app), commands sent through an AES-128-GCM + HMAC encrypted HTTPS pipeline, realtime state received via **MQTT-over-TLS push** (no polling) — everything happens in a **mobile-first bilingual VI/EN web UI** running on the ESP32 itself: no app to install, no separate server.
+**A self-contained Tuya hub running on a single ESP32-S3 board.** Account authentication via Device Sharing (scan a QR code with the Smart Life app), commands sent through an AES-128-GCM + HMAC encrypted HTTPS pipeline, realtime state received via **MQTT-over-TLS push** — and because a sharing session does not always receive those pushes, the hub also reconciles the state from the Tuya cloud every 10 seconds and right after every command — everything happens in a **mobile-first bilingual VI/EN web UI** running on the ESP32 itself: no app to install, no separate server.
 
 > Firmware — the latest release is always on the [Releases](https://github.com/smarthomeblack/esp32-tuya/releases) page · ESP-IDF v6.0.1 · factory bin ~1.5 MB / OTA slot 3.9 MB · embedded UI ~102 KB gzip
 
@@ -14,7 +14,7 @@
 - 📡 **mDNS** — reach the hub at `http://tuyahub-<4hex>.local`, no need to remember an IP.
 - 📶 **First-time AP provisioning** — the hub broadcasts a `TuyaHub-XXXX` setup AP + captive portal (DNS hijack) for entering WiFi, no screen or cable needed.
 - ♻️ **Factory reset / reboot** — from the Settings page (wipes all saved settings — WiFi including the setup-AP password, account link, device list, API key — then restarts).
-- 🧪 **Boot self-test** — 930 checks run before the hub goes online; a failure keeps it offline.
+- 🧪 **Boot self-test** — 949 checks run before the hub goes online; a failure keeps it offline.
 - 💾 **Coredump** — when the firmware crashes, the crash details are stored in a dedicated memory region (64 KB) for later debugging.
 
 ## 🧭 Architecture overview
@@ -98,7 +98,7 @@ Step-by-step details: [docs/getting-started.md](docs/getting-started.md).
 6. The hub switches to **Linked** → the wizard asks about the **optional Tuya IoT Platform** (to show the full datapoint set on some devices such as power-metering switches): fill in your IoT Platform credentials or skip it.
 7. The hub **scans for devices** (progress bar) → a **checklist** appears: tick the devices you want to add, expand each device to **untick the entities you don't need** → "Add N devices" → the dashboard shows the selected devices + scenes.
 8. **From the next boot on: no re-scanning** — the device list is already saved on the hub, so a restart brings realtime state + scenes back right away. The **"+"** button on the dashboard (or the empty state) **adds new devices** (re-scan, only devices that are new can be ticked); the **gear** icon on a card **edits entities** (tick/untick) or **deletes the device**.
-9. Control every device: flip a switch, drag the brightness, pick a color... The UI shows a *pending* spinner until MQTT confirms the state back.
+9. Control every device: flip a switch, drag the brightness, pick a color... The UI shows a *pending* spinner until the hub confirms the new state (an MQTT push, or the cloud check right after the command).
 
 ## 🌐 API & WebSocket
 
