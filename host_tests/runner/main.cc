@@ -35,27 +35,27 @@ constexpr Suite kSuites[] = {
     {"pipeline", "PipelineSelfTest: PIPELINE SELFTEST PASS (26 checks)",
      tuya_cloud::RunPipelineSelfTest},
     {"openapi", "TuyaIoTTest: TUYA IOT SELFTEST PASS (28 checks)", tuya_cloud::RunOpenApiSelfTest},
-    {"model", "ModelSelfTest: MODEL SELFTEST PASS (153 checks)", hub_core::RunModelSelfTest},
+    {"model", "ModelSelfTest: MODEL SELFTEST PASS (172 checks)", hub_core::RunModelSelfTest},
     {"store", "DeviceStoreTest: DEVICE STORE SELFTEST PASS (64 checks)",
      hub_core::RunDeviceStoreSelfTest},
     {"enrich", "EnrichSelfTest: TUYA IOT ENRICH SELFTEST PASS (87 checks)",
      hub_core::RunOpenApiEnrichmentSelfTest},
-    {"mqtt", "MqttSelfTest: MQTT SELFTEST PASS (99 checks)", tuya_mqtt::RunMqttMessageSelfTest},
-    {"command", "CommandSelfTest: COMMAND SELFTEST PASS (214 checks)",
+    {"mqtt", "MqttSelfTest: MQTT SELFTEST PASS (114 checks)", tuya_mqtt::RunMqttMessageSelfTest},
+    {"command", "CommandSelfTest: COMMAND SELFTEST PASS (219 checks)",
      hub_core::RunCommandSelfTest},
     {"discovery", "DiscoverySelfTest: DISCOVERY SELFTEST PASS (90 checks)",
      hub_core::RunDiscoverySelfTest},
 };
 
 // Suites that stay hardware-only; printed in every run so the coverage gap
-// is explicit. Total on-device gate: 930 checks.
+// is explicit. Total on-device gate: 953 checks.
 constexpr const char* kExcluded[] = {
     "crypto (75): at-rest key material comes from eFuse (esp_hmac/esp_efuse)",
     "sys (56): settings roundtrip + log buffer need NVS/heap introspection",
     "assets (22): asset_store links ESP-IDF flash/mmap; the vectors are RAM-only",
 };
 
-constexpr int kPinnedTotal = 26 + 28 + 153 + 64 + 87 + 99 + 214 + 90;
+constexpr int kPinnedTotal = 26 + 28 + 172 + 64 + 87 + 114 + 219 + 90;
 constexpr int kDeviceTotal = kPinnedTotal + 75 + 56 + 22;
 
 bool LineContains(const char* haystack, const char* needle) {

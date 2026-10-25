@@ -8,10 +8,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "hub_core/device_registry.h"
+#include "hub_core/strategies.h"
 #include "tuya_crypto/json_fields.h"
 #include "tuya_crypto/json_guard.h"
 
@@ -263,6 +266,77 @@ std::string DeviceTopic(const std::string& templ, std::string_view dev_id, bool 
     std::string topic = FormatTopicTemplate(templ, dev_id);
     topic += support_local ? "/pen" : "/sta";
     return topic;
+}
+
+namespace {
+
+/// One-shot report warnings (mqtt task only: ApplyDeviceReport has one
+/// caller, so no mutex): per device, and per (device, dpId).
+std::set<std::string> s_report_warned;
+std::set<std::pair<std::string, int>> s_dp_warned;
+
+/// True when `topic` ends with one of the two device suffixes this client
+/// subscribes; `support_local` is set to the suffix's implied form.
+bool TopicSupportLocal(std::string_view topic, bool& support_local) {
+    if (topic.ends_with("/pen")) {
+        support_local = true;
+        return true;
+    }
+    if (topic.ends_with("/sta")) {
+        support_local = false;
+        return true;
+    }
+    return false;
+}
+
+}  // namespace
+
+void ApplyDeviceReport(const MqttMessage& msg, std::string_view topic) {
+    hub_core::DeviceRegistry& registry = hub_core::DeviceRegistry::GetInstance();
+    hub_core::Device device;
+    if (!registry.GetDevice(msg.dev_id, device)) {
+        ESP_LOGD(TAG, "report for unknown device %s dropped", msg.dev_id.c_str());
+        return;
+    }
+    bool topic_local = false;
+    if (TopicSupportLocal(topic, topic_local) && topic_local != device.support_local &&
+        s_report_warned.insert(msg.dev_id).second) {
+        // The cloud does not pick the suffix by support_local: never drop on it.
+        ESP_LOGW(TAG, "device %s: report on %.*s with support_local=%d — applying by item shape",
+                 msg.dev_id.c_str(), static_cast<int>(topic.size()), topic.data(),
+                 device.support_local ? 1 : 0);
+    }
+    for (const StatusItem& item : msg.items) {
+        if (!item.has_dp_id && !item.has_code) {
+            if (s_report_warned.insert(msg.dev_id).second) {
+                ESP_LOGW(TAG, "dev=%s item has neither dpId nor code", msg.dev_id.c_str());
+            }
+            continue;
+        }
+        if (!item.has_value) {
+            continue;
+        }
+        if (item.has_dp_id) {
+            std::string code;
+            hub_core::DpValue value;
+            if (hub_core::ConvertDpReport(device.id, device.local_strategy, device.status_range,
+                                          item.dp_id, item.value, code, value)) {
+                registry.UpdateStatus(msg.dev_id, code, value, item.t);
+                continue;
+            }
+            // An item can carry both keys: never lose an update we can apply.
+            if (!item.has_code) {
+                if (s_dp_warned.insert({msg.dev_id, item.dp_id}).second) {
+                    ESP_LOGW(TAG, "dev=%s dpId=%d report dropped (no usable strategy)",
+                             msg.dev_id.c_str(), item.dp_id);
+                }
+                continue;
+            }
+        }
+        if (item.has_code) {
+            registry.UpdateStatus(msg.dev_id, item.code, item.value, item.t);
+        }
+    }
 }
 
 bool PayloadAssembler::Feed(int current_data_offset, int total_data_len, const char* data,

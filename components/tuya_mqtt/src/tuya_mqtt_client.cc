@@ -21,7 +21,6 @@
 #include "hub_core/device_registry.h"
 #include "hub_core/main_thread.h"
 #include "hub_core/parse.h"
-#include "hub_core/strategies.h"
 #include "tuya_cloud/api_response.h"
 #include "tuya_cloud/constants.h"
 #include "tuya_cloud/customer_api.h"
@@ -142,40 +141,12 @@ void OverlayCloudIdentity(Device& device, const Device& cloud) {
     device.update_time = cloud.update_time;
 }
 
-/// protocol 4 dispatch: local-strategy conversion for support_local
-/// devices, direct code/value otherwise.
-void HandleDeviceReport(const MqttMessage& msg) {
-    DeviceRegistry& registry = DeviceRegistry::GetInstance();
-    Device device;
-    if (!registry.GetDevice(msg.dev_id, device)) {
-        // Unknown device: nothing to update.
-        ESP_LOGD(TAG, "report for unknown device %s dropped", msg.dev_id.c_str());
-        return;
-    }
-    for (const StatusItem& item : msg.items) {
-        if (device.support_local) {
-            if (!item.has_dp_id || !item.has_value) {
-                continue;
-            }
-            std::string code;
-            hub_core::DpValue value;
-            if (!hub_core::ConvertDpReport(device.id, device.local_strategy, device.status_range,
-                                           item.dp_id, item.value, code, value)) {
-                continue;
-            }
-            registry.UpdateStatus(msg.dev_id, code, value, item.t);
-        } else {
-            if (!item.has_code || !item.has_value) {
-                continue;
-            }
-            registry.UpdateStatus(msg.dev_id, item.code, item.value, item.t);
-        }
-    }
-}
-
 /// File-scope reassembly state for fragmented DATA events (mqtt task
 /// only; keeps the internal type out of the public header).
 PayloadAssembler s_rx_assembler;
+/// Topic of the in-progress DATA message (mqtt task only); esp-mqtt carries
+/// it on the first fragment, so it lives until the message completes.
+std::string s_rx_topic;
 
 }  // namespace
 
@@ -493,6 +464,7 @@ void TuyaMqttClient::MqttEventHandler(void* arg, const char* event_base, int32_t
         case MQTT_EVENT_CONNECTED: {
             self->connected_.store(true);
             s_rx_assembler.Reset();  // a fresh session has no partial message
+            s_rx_topic.clear();
             self->NotifyStatus(true, 0, "");
             // Wake the connect wait; subscribing happens right here.
             xEventGroupSetBits(static_cast<EventGroupHandle_t>(self->events_), kBitConnected);
@@ -540,18 +512,21 @@ void TuyaMqttClient::MqttEventHandler(void* arg, const char* event_base, int32_t
             // Reassemble fragmented DATA events, then dispatch. The client
             // handle comes from THIS event (never the cross-task client_).
             if (event->topic != nullptr && event->topic_len > 0) {
-                ESP_LOGD(TAG, "mqtt message topic=%.*s", event->topic_len, event->topic);
+                s_rx_topic.assign(event->topic, static_cast<size_t>(event->topic_len));
+                ESP_LOGI(TAG, "mqtt data topic=%.*s off=%d len=%d total=%d", event->topic_len,
+                         event->topic, event->current_data_offset, event->data_len,
+                         event->total_data_len);
             }
             std::string payload;
             if (s_rx_assembler.Feed(event->current_data_offset, event->total_data_len, event->data,
                                     event->data_len, payload)) {
-                self->HandlePayload(event->client, payload.data(), payload.size());
+                self->HandlePayload(event->client, s_rx_topic, payload.data(), payload.size());
             }
             break;
         }
 
         case MQTT_EVENT_SUBSCRIBED:
-            ESP_LOGD(TAG, "mqtt subscribed (msg_id=%d)", event->msg_id);
+            ESP_LOGI(TAG, "mqtt subscribed (msg_id=%d)", event->msg_id);
             break;
 
         case MQTT_EVENT_UNSUBSCRIBED:
@@ -593,13 +568,17 @@ void TuyaMqttClient::SubscribeAll(struct esp_mqtt_client* client) {
 
     // Device topics: only set_up devices, collected under the registry
     // lock (no blocking inside it), subscribed in batches of 20 at QoS 0.
+    // Both suffixes per device: the cloud picks one per report, not by flag.
     if (cfg.dev_topic_template.empty()) {
         return;
     }
     std::vector<std::string> topics;
+    size_t device_count = 0;
     registry.ForEachDevice([&](const Device& device) {
         if (device.set_up) {
-            topics.push_back(DeviceTopic(cfg.dev_topic_template, device.id, device.support_local));
+            topics.push_back(DeviceTopic(cfg.dev_topic_template, device.id, true));
+            topics.push_back(DeviceTopic(cfg.dev_topic_template, device.id, false));
+            ++device_count;
         }
     });
     size_t device_subs = 0;
@@ -615,24 +594,28 @@ void TuyaMqttClient::SubscribeAll(struct esp_mqtt_client* client) {
         if (msg_id >= 0) {
             device_subs += n;
         } else {
-            ESP_LOGW(TAG, "device subscribe batch failed at %u/%u (msg_id=%d)",
-                     static_cast<unsigned>(i), static_cast<unsigned>(topics.size()), msg_id);
+            ESP_LOGW(TAG, "device subscribe batch failed (filters %u..%u of %u, msg_id=%d)",
+                     static_cast<unsigned>(i), static_cast<unsigned>(i + n - 1),
+                     static_cast<unsigned>(topics.size()), msg_id);
         }
     }
-    ESP_LOGI(TAG, "subscribed %u device topic(s) (%u tracked device(s))",
-             static_cast<unsigned>(device_subs), static_cast<unsigned>(topics.size()));
+    ESP_LOGI(TAG, "subscribed %u device topic(s) for %u tracked device(s)",
+             static_cast<unsigned>(device_subs), static_cast<unsigned>(device_count));
 }
 
 // ---- Message dispatch ----
 
-void TuyaMqttClient::HandlePayload(struct esp_mqtt_client* client, const char* data, size_t len) {
+void TuyaMqttClient::HandlePayload(struct esp_mqtt_client* client, std::string_view topic,
+                                   const char* data, size_t len) {
     MqttMessage msg;
     if (!ParseMqttMessage(data, len, msg)) {
         ESP_LOGW(TAG, "unparsable mqtt payload (%u B) dropped", static_cast<unsigned>(len));
         return;  // drop the message, keep the client
     }
+    ESP_LOGI(TAG, "mqtt msg protocol=%d dev=%s items=%u", msg.protocol, msg.dev_id.c_str(),
+             static_cast<unsigned>(msg.items.size()));
     if (msg.protocol == kProtocolDeviceReport) {
-        HandleDeviceReport(msg);
+        ApplyDeviceReport(msg, topic);
         return;
     }
     if (msg.protocol == kProtocolOther) {
@@ -682,8 +665,8 @@ void TuyaMqttClient::HandleDeviceEvent(struct esp_mqtt_client* client, const std
         return;
     }
     if (biz_code == kBizCodeDelete) {
-        // Remove from the registry, then unsubscribe the topic computed
-        // from the (pre-removal) support_local.
+        // Remove from the registry, then unsubscribe both topics that the
+        // connect-time subscription added for this device.
         Device device;
         if (!registry.GetDevice(dev_id, device)) {
             return;  // unknown device: nothing to unsubscribe
@@ -694,10 +677,12 @@ void TuyaMqttClient::HandleDeviceEvent(struct esp_mqtt_client* client, const std
             cfg = config_;
         }
         if (registry.RemoveDevice(dev_id) && client != nullptr && !cfg.dev_topic_template.empty()) {
-            const std::string topic =
-                DeviceTopic(cfg.dev_topic_template, dev_id, device.support_local);
-            esp_mqtt_client_unsubscribe(client, topic.c_str());
-            ESP_LOGI(TAG, "device %s deleted — unsubscribed %s", dev_id.c_str(), topic.c_str());
+            for (const bool support_local : {true, false}) {
+                const std::string topic =
+                    DeviceTopic(cfg.dev_topic_template, dev_id, support_local);
+                esp_mqtt_client_unsubscribe(client, topic.c_str());
+            }
+            ESP_LOGI(TAG, "device %s deleted — unsubscribed both report topics", dev_id.c_str());
         }
         return;
     }
@@ -794,11 +779,13 @@ void TuyaMqttClient::ProcessBindUser(const std::string& dev_id) {
         cfg = config_;
     }
     if (client_ != nullptr && IsConnected() && !cfg.dev_topic_template.empty()) {
-        const std::string topic =
-            DeviceTopic(cfg.dev_topic_template, device.id, device.support_local);
-        const int msg_id = esp_mqtt_client_subscribe_single(client_, topic.c_str(), 0);
-        ESP_LOGI(TAG, "bindUser %s: subscribed %s (msg_id=%d)", device.id.c_str(), topic.c_str(),
-                 msg_id);
+        // Both suffixes: a late-bound device gets the same coverage.
+        for (const bool support_local : {true, false}) {
+            const std::string topic = DeviceTopic(cfg.dev_topic_template, device.id, support_local);
+            const int msg_id = esp_mqtt_client_subscribe_single(client_, topic.c_str(), 0);
+            ESP_LOGI(TAG, "bindUser %s: subscribed %s (msg_id=%d)", device.id.c_str(),
+                     topic.c_str(), msg_id);
+        }
     }
 }
 

@@ -5,6 +5,7 @@
 #include <functional>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 // Opaque esp-mqtt handle, forward-declared at global scope so this public
 // header stays free of <mqtt_client.h> (a PRIVATE dependency).
@@ -108,7 +109,8 @@ private:
     void SubscribeAll(struct esp_mqtt_client* client);
 
     /// One complete (reassembled if fragmented) payload: the protocol dispatch.
-    void HandlePayload(struct esp_mqtt_client* client, const char* data, size_t len);
+    void HandlePayload(struct esp_mqtt_client* client, std::string_view topic, const char* data,
+                       size_t len);
 
     /// protocol 20 event dispatch; `client` is used to UNSUBSCRIBE on delete.
     void HandleDeviceEvent(struct esp_mqtt_client* client, const std::string& biz_code,

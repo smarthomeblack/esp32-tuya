@@ -13,8 +13,6 @@
 #include "hub_core/device_registry.h"
 #include "web_server/api_auth.h"
 
-static const char* TAG = "RestApi";
-
 namespace web_server {
 namespace rest_api {
 

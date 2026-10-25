@@ -11,6 +11,7 @@
 #include "hub_core/device_registry.h"
 #include "hub_core/dp_value.h"
 #include "hub_core/parse.h"
+#include "hub_core/presence_status.h"
 #include "hub_core/strategies.h"
 #include "parse_helpers.h"
 
@@ -826,6 +827,86 @@ void TestRegistryRooms(TestResult& r) {
     registry.ClearAll();
 }
 
+/// Presence-poll merge: changed codes only, a rerun is silent.
+void TestApplyPresenceStatus(TestResult& r) {
+    DeviceRegistry& registry = DeviceRegistry::GetInstance();
+    std::vector<RegistryEventPayload> events;
+    registry.SetEventListener([&events](const RegistryEventPayload& ev) { events.push_back(ev); });
+    registry.ClearAll();
+
+    Device device;
+    device.id = "presence-dev";
+    device.name = "Presence Device";
+    device.status["switch_1"] = DpValue::FromBool(true);
+    device.status["countdown_1"] = DpValue::FromInt(0);
+    registry.UpsertDevice(device);
+
+    // The poll may carry per-DP report times; the changed code is written once.
+    Device poll = device;
+    poll.status["switch_1"] = DpValue::FromBool(false);
+    poll.dp_timestamps["switch_1"] = 1752456620499;
+    events.clear();
+    PresenceApplyResult merged = ApplyPresenceStatus(registry, poll);
+    CheckEqInt(r, "presence.apply.changed_applied", 1, static_cast<long long>(merged.applied));
+    CheckEqInt(r, "presence.apply.changed_unchanged", 1, static_cast<long long>(merged.unchanged));
+    CheckEqInt(r, "presence.apply.changed_events", 1, static_cast<long long>(events.size()));
+    Device out;
+    CheckTrue(r, "presence.apply.value_stored",
+              registry.GetDevice(device.id, out) && !out.status["switch_1"].b);
+    CheckEqInt(r, "presence.apply.timestamp_stored", 1752456620499,
+               out.dp_timestamps.count("switch_1") == 1 ? out.dp_timestamps["switch_1"] : 0);
+    CheckTrue(r, "presence.apply.not_polled_no_timestamp",
+              out.dp_timestamps.count("countdown_1") == 0);
+
+    // An identical rerun: nothing written, so NOT one event per code.
+    events.clear();
+    merged = ApplyPresenceStatus(registry, poll);
+    CheckEqInt(r, "presence.apply.rerun_applied", 0, static_cast<long long>(merged.applied));
+    CheckEqInt(r, "presence.apply.rerun_unchanged", 2, static_cast<long long>(merged.unchanged));
+    CheckEqInt(r, "presence.apply.rerun_no_event", 0, static_cast<long long>(events.size()));
+
+    // Several moves in one poll are applied together.
+    Device both = poll;
+    both.status["switch_1"] = DpValue::FromBool(true);
+    both.status["countdown_1"] = DpValue::FromInt(30);
+    events.clear();
+    merged = ApplyPresenceStatus(registry, both);
+    CheckEqInt(r, "presence.apply.multi_applied", 2, static_cast<long long>(merged.applied));
+    CheckEqInt(r, "presence.apply.multi_unchanged", 0, static_cast<long long>(merged.unchanged));
+    CheckEqInt(r, "presence.apply.multi_events", 2, static_cast<long long>(events.size()));
+
+    // Not committed locally: nothing to merge into.
+    Device ghost;
+    ghost.id = "presence-ghost";
+    ghost.status["switch_1"] = DpValue::FromBool(true);
+    events.clear();
+    merged = ApplyPresenceStatus(registry, ghost);
+    CheckTrue(r, "presence.apply.unknown_device_noop",
+              merged.applied == 0 && merged.unchanged == 0);
+
+    // A disabled entity never takes the cloud value.
+    CheckTrue(r, "presence.apply.disable_entity",
+              registry.SetEntityEnabled(device.id, "countdown_1", false));
+    Device disabled_poll = both;
+    disabled_poll.status["countdown_1"] = DpValue::FromInt(45);
+    events.clear();
+    merged = ApplyPresenceStatus(registry, disabled_poll);
+    CheckEqInt(r, "presence.apply.disabled_applied", 0, static_cast<long long>(merged.applied));
+    CheckEqInt(r, "presence.apply.disabled_unchanged", 2, static_cast<long long>(merged.unchanged));
+    CheckEqInt(r, "presence.apply.disabled_no_event", 0, static_cast<long long>(events.size()));
+    CheckTrue(r, "presence.apply.disabled_value_kept",
+              registry.GetDevice(device.id, out) && out.status["countdown_1"].i == 30);
+
+    // A poll without a status list (both arrays absent) is a no-op.
+    Device no_status;
+    no_status.id = device.id;
+    merged = ApplyPresenceStatus(registry, no_status);
+    CheckTrue(r, "presence.apply.empty_status_noop", merged.applied == 0 && merged.unchanged == 0);
+
+    registry.SetEventListener(nullptr);
+    registry.ClearAll();
+}
+
 }  // namespace
 
 bool RunModelSelfTest() {
@@ -839,6 +920,7 @@ bool RunModelSelfTest() {
     TestParseRooms(r);
     TestParseRoomDevices(r);
     TestRegistryRooms(r);
+    TestApplyPresenceStatus(r);
 
     if (r.passed == r.total) {
         ESP_LOGI(TAG, "MODEL SELFTEST PASS (%d checks)", r.total);

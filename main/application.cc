@@ -157,6 +157,10 @@ void Application::Start() {
                 [status] { Application::GetInstance().OnMqttStatus(status); });
         });
 
+    // A sent command means the cloud state moved — burst-poll so the UI confirms.
+    hub_core::CommandService::GetInstance().SetCommandSentHook(
+        [] { Application::GetInstance().SchedulePresenceBurst(); });
+
     // REST handlers marshal onto this loop; registered before StartNetwork.
     web_server::WebServer::GetInstance().SetScheduler(
         [](std::function<void()> job) { Application::GetInstance().Schedule(std::move(job)); });
@@ -693,6 +697,13 @@ void Application::OnClockTick() {
                          static_cast<unsigned>(mqtt_push_retries_));
             }
         });
+    }
+
+    // Presence/status poll while linked (10 s, or the 1 s post-command burst):
+    // the poll is the only state source when the push feed stays silent.
+    if (state_.load() == kDeviceStateLinked &&
+        static_cast<int64_t>(sys::SystemInfo::GetUptimeMs()) >= presence_next_poll_ms_.load()) {
+        SchedulePresenceRefresh();  // resets the deadline + latch-skips if in flight
     }
 
     // OpenAPI keepalive: the token expires after 2 h — check every 10 min.

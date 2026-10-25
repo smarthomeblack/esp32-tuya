@@ -12,15 +12,15 @@ Every component has a self-test suite that runs **before** the hub joins the net
 | `sys` log/cpu | 56 | log ring reassembly/eviction, capture scrub, line parse, CPU usage vector table, Settings NVS round-trip, NVS enumeration |
 | `tuya_cloud` pipeline | 26 | URL, body, 6 headers + sign of the request pipeline |
 | `tuya_cloud` OpenAPI | 28 | HMAC-SHA256 sign + login body for the Tuya IoT Platform (golden vectors) + home/room path templates |
-| `hub_core` model | 153 | response parsing + default/enum strategies + registry and room semantics |
+| `hub_core` model | 172 | response parsing + default/enum strategies + registry, room and presence-merge semantics |
 | `hub_core` device store | 64 | serialize/parse `registry.json` byte-exact golden + round-trip + corrupt tolerance + legacy (no rooms) snapshot |
 | `hub_services` enrichment | 87 | Thing Model double-encoding + shadow + sharing-wins merge |
-| `tuya_mqtt` message | 99 | protocol 4/20, topic `/pen-`/`/sta`, reassembly |
-| `hub_services` command | 214 | 10 s dedup, byte-exact body, scenes parse, disabled-entity blocking |
+| `tuya_mqtt` message | 114 | protocol 4/20, topic `/pen`/`/sta`, code/dpId dispatch, reassembly |
+| `hub_services` command | 219 | 10 s dedup, byte-exact body, scenes parse, disabled-entity blocking, post-send hook |
 | `hub_services` discovery | 90 | degraded vs loaded detail staging (uncached retries), commit add/refresh/skip, entity selection, no-scan guards |
 | `web_assets` | 22 | WAS1 image validate (magic/version/TOC bounds/CRC) + fallback page |
 
-**Total: 930 checks** — all must PASS before joining the network.
+**Total: 953 checks** — all must PASS before joining the network.
 
 Every firmware change must keep this coverage level intact: when you add new code, add matching checks to that component's self-test — never lower the bar.
 
@@ -79,17 +79,17 @@ Statically checks the web UI's ES modules (CI runs this as the "Lint web import 
 
 The same boot-gate self-test sources the hub runs on device, compiled for the host with plain gcc/g++/cmake — no ESP-IDF, no board. ESP-IDF headers are shadowed by minimal shims in `host_tests/` (first on the include path): an `esp_log` that captures log lines in memory, an in-memory NVS, FreeRTOS no-ops, and a software PSA crypto implementation (SHA-256, MD5, HMAC, AES) validated by the repo's own golden vectors. The runner executes each covered suite in the on-device boot-gate order and requires the exact `... SELFTEST PASS (N checks)` line — so both a failing check and a suite silently gaining or losing checks fail the run.
 
-Coverage: 8 of the 11 device suites — 761 of the 930 checks.
+Coverage: 8 of the 11 device suites — 800 of the 953 checks.
 
 | Self-test | Checks |
 |---|---|
 | `tuya_cloud` pipeline | 26 |
 | `tuya_cloud` OpenAPI | 28 |
-| `hub_core` model | 153 |
+| `hub_core` model | 172 |
 | `hub_core` device store | 64 |
 | `hub_services` enrichment | 87 |
-| `tuya_mqtt` message | 99 |
-| `hub_services` command | 214 |
+| `tuya_mqtt` message | 114 |
+| `hub_services` command | 219 |
 | `hub_services` discovery | 90 |
 
 The three remaining suites are hardware-bound and stay device-only (the runner prints this gap on every run): `tuya_crypto` (75 — at-rest key material comes from eFuse), `sys` (56 — the settings roundtrip and log buffer need NVS/heap introspection), `web_assets` (22 — `asset_store` links ESP-IDF flash/mmap; the vectors are RAM-only).
@@ -107,7 +107,7 @@ cmake --build build-host-tests -j
 A successful run ends with:
 
 ```
-SELFTEST RUNNER PASS (8 suites, 761 checks)
+SELFTEST RUNNER PASS (8 suites, 800 checks)
 ```
 
 One limitation: host crypto is that software PSA shim validated by golden vectors — test-level parity with the device, not binary parity with its mbedtls/hardware AES.
@@ -115,7 +115,7 @@ One limitation: host crypto is that software PSA shim validated by golden vector
 ## On real hardware
 
 1. Build + flash following [getting-started.md](getting-started.md).
-2. Open a serial monitor (`idf.py -p <PORT> monitor`): watch the boot log — every component's self-test lines must PASS, a total of 930/930, **and only then** does the hub start connecting to WiFi.
+2. Open a serial monitor (`idf.py -p <PORT> monitor`): watch the boot log — every component's self-test lines must PASS, a total of 953/953, **and only then** does the hub start connecting to WiFi.
 3. Any failed check → `FatalError` in the log, fast-blinking LED, no network. Find the failed check in the last log line and match it to the corresponding component.
 
 Note: the mock + golden vectors cover protocol/logic; real hardware behavior (flash, PSRAM, TLS, MQTT broker, real Tuya devices) can only be acceptance-tested on the board — the mock doesn't replace this step.

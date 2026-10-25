@@ -844,6 +844,34 @@ void TestQuotaHelpers(TestResult& r) {
     }
 }
 
+/// The command-sent hook must stay silent unless BOTH legs succeeded. A
+/// successful send needs the cloud, so only the negative side is driven here.
+void TestCommandSentHook(TestResult& r) {
+    CommandService& service = CommandService::GetInstance();
+    int fired = 0;
+    service.SetCommandSentHook([&fired] { ++fired; });
+
+    // Sharing leg unconfigured -> kError, so the notifier must not run.
+    CheckTrue(r, "hook.send_failed",
+              service.SendDeviceCommands("selftest-hook",
+                                         {DeviceCommand{"switch_1", DpValue::FromBool(true)}}) ==
+                  CommandResult::kError);
+    CheckEqInt(r, "hook.not_fired_on_error", 0, fired);
+    // Rejected before any leg (empty dev id).
+    CheckTrue(
+        r, "hook.rejected_before_send",
+        service.SendDeviceCommands("", {DeviceCommand{"switch_1", DpValue::FromBool(true)}}) ==
+            CommandResult::kError);
+    CheckEqInt(r, "hook.not_fired_on_reject", 0, fired);
+
+    // The hook is replaceable/clearable (a stale capture must be releasable).
+    service.SetCommandSentHook(nullptr);
+    CheckTrue(r, "hook.cleared_service_still_errors",
+              service.SendDeviceCommands("selftest-hook",
+                                         {DeviceCommand{"switch_1", DpValue::FromBool(true)}}) ==
+                  CommandResult::kError);
+}
+
 }  // namespace
 
 bool RunCommandSelfTest() {
@@ -859,6 +887,7 @@ bool RunCommandSelfTest() {
     TestBuildOpenApiCommandsBody(r);
     TestSplitByPropertyUpdate(r);
     TestQuotaHelpers(r);
+    TestCommandSentHook(r);
 
     if (r.passed == r.total) {
         ESP_LOGI(TAG, "COMMAND SELFTEST PASS (%d checks)", r.total);

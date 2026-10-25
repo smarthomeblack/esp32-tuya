@@ -294,7 +294,7 @@ Ask the hub to re-read the rooms and their devices from the Tuya IoT Platform (o
 | `200 OK` + `{"success": true, "already_running": true}` | one is already in flight (single-flight) |
 | `500 internal` | the refresh hook is not wired |
 
-The list is also refreshed automatically at boot, at the end of every presence refresh (after an MQTT (re)connect), and on demand. The refresh is skipped silently (log line only, `202` still returned) while Tuya IoT is not connected, and a home whose room call fails keeps its previous assignments — only a complete, successful home sweep may clear a device's room.
+The list is also refreshed automatically at boot, at most once every 5 minutes while linked (it rides along with the presence refresh, which runs at boot, every 10 seconds while linked, after a successful command and after an MQTT (re)connect), and on demand. The refresh is skipped silently (log line only, `202` still returned) while Tuya IoT is not connected, and a home whose room call fails keeps its previous assignments — only a complete, successful home sweep may clear a device's room.
 
 ### GET /api/scenes?home_id=
 
@@ -722,7 +722,7 @@ ws://tuyahub-<xxxx>.local/ws?token=<API key>
 | `device_added` | `{devId}` | discovery commit, registry restore, or a model/rename refresh of an already-added device — fired only when something actually changed (a no-op save with the same name and the same entity selection sends no event and does not re-save the registry snapshot). The payload is `{devId}` alone: the shipped web UI cannot build a card from it, so a known id triggers one debounced silent refresh (~300 ms) of `/api/homes`, `/api/devices`, `/api/scenes` and `/api/status`, which patches only the structurally changed panels |
 | `device_removed` | `{devId}` | `POST /api/devices/{id}/remove`, or a cloud MQTT push reporting the device was deleted — the shipped web UI drops the device from its model and removes exactly that one card node, no REST call |
 | `device_update` | `{devId, name, props: [{code, value, t}]}` | MQTT push reporting a datapoint change (dedup; `t` = report timestamp, `0` if never reported) |
-| `device_online` | `{devId, online}` | online/offline change (MQTT push, or a presence refresh after MQTT (re)connects) |
+| `device_online` | `{devId, online}` | online/offline change (MQTT push, or a presence refresh: at boot, every 10 seconds while linked, after a successful command, and after an MQTT (re)connect) |
 | `rooms_updated` | `{home_id}` | the room list of a home changed (a room refresh after boot/`POST /api/rooms/refresh`, a rename, a reorder). Clients refetch `GET /api/rooms` (and `GET /api/devices` for the new `room_id`/`room_name`) — the payload carries no room data |
 
 Minimal client example (JS):

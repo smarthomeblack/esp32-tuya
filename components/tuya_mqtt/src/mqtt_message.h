@@ -75,6 +75,11 @@ hub_core::DpValue DpValueFromJsonNode(const cJSON* node);
 /// dispatch-read field is missing: p4 devId+status, p20 bizData.devId).
 bool ParseMqttMessage(const char* payload, size_t len, MqttMessage& out);
 
+/// Applies a protocol-4 report: an item with dpId goes through the device's
+/// local strategy, an item with a code is applied directly. `topic` only
+/// feeds the one-shot suffix/support_local mismatch log (mqtt task only).
+void ApplyDeviceReport(const MqttMessage& msg, std::string_view topic);
+
 // ---- Access-config parsing ----
 
 /// Parses the `result` of /v1.0/m/life/ha/access/config (incl. the
@@ -92,8 +97,8 @@ bool TranslateBrokerUri(const std::string& url_raw, std::string& broker_uri, std
 /// (every occurrence of each).
 std::string FormatTopicTemplate(const std::string& templ, std::string_view id);
 
-/// Device topic: template + "/pen" (support_local — raw dpId reports)
-/// or "/sta" (standard code reports).
+/// Device topic: template + "/pen" (raw dpId reports) or "/sta" (standard
+/// code reports). Both are subscribed: the report shape decides the parse.
 std::string DeviceTopic(const std::string& templ, std::string_view dev_id, bool support_local);
 
 // ---- Fragmented DATA-event reassembly (esp-mqtt MQTT_EVENT_DATA) ----

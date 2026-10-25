@@ -13,7 +13,7 @@ Describe exactly how you verified the change yourself before sending the PR.
 **PRs touching firmware:**
 
 - [ ] Clean build with `idf.py build` — no warnings
-- [ ] Flashed to real hardware: boot self-test **930/930** pass (procedure: [docs/testing.md](/docs/testing.md))
+- [ ] Flashed to real hardware: boot self-test **953/953** pass (procedure: [docs/testing.md](/docs/testing.md))
 
 **PRs touching the web UI:**
 
