@@ -115,10 +115,11 @@ private:
 
     void OnMqttStatus(const tuya_mqtt::MqttStatus& status);
 
-    /// Queues the one-shot presence refresh once per MQTT connect. Main loop only.
+    /// Queues one presence/status poll (single-flight). Main loop only.
     void SchedulePresenceRefresh();
 
-    /// Arms the 5-poll 1 s burst after a successful command (any task).
+    /// Arms the 5-poll 1 s burst after a successful command (any task); the
+    /// poll itself is marshalled onto the main loop.
     void SchedulePresenceBurst();
 
     /// Heals registry online flags + status from the cloud; runs on "tuya_presence".
@@ -152,7 +153,7 @@ private:
 
     static void RoomRefreshTask(void* arg);
 
-    /// Re-arms a task whose spawn failed (the caller still holds its latch).
+    /// Frees the failed spawn's latch and re-arms the 60 s retry.
     /// Main loop only.
     void ScheduleSpawnRetry(bool presence);
 
@@ -254,6 +255,7 @@ private:
     // One-shot 30 s retry timer for a partial fetch; lazily created once.
     esp_timer_handle_t scene_retry_timer_ = nullptr;
     // One-shot 60 s retry for a failed presence/scene task spawn; lazily created.
+    // Main loop only (the esp_timer callback marshals its re-dispatch).
     esp_timer_handle_t spawn_retry_timer_ = nullptr;
     // Task family the armed spawn retry re-spawns (true = presence).
     std::atomic<bool> spawn_retry_presence_{false};

@@ -41,8 +41,8 @@ constexpr UBaseType_t kRoomTaskPriority = 3;
 // Partial scene-fetch retry: 30 s one-shot delay, max 3 per session.
 constexpr int64_t kSceneFetchRetryDelayUs = 30 * 1000000;
 constexpr uint32_t kSceneFetchRetryCap = 3;
-// Spawn-failure re-arm (presence/scene): one retry a minute; the shared latch
-// refuses every trigger until the re-armed retry frees it.
+// Spawn-failure re-arm (presence/scene): one retry a minute; arming frees the
+// failed spawn's latch so the retry can take it again.
 constexpr int64_t kSpawnRetryDelayUs = 60 * 1000000;
 
 /// Registry -> JSON of a typed API response. The client Duplicates it, so the
@@ -107,8 +107,8 @@ void Application::SchedulePresenceRefresh() {
     const BaseType_t ok = xTaskCreate(PresenceRefreshTask, "tuya_presence", kPresenceTaskStackBytes,
                                       this, kPresenceTaskPriority, nullptr);
     if (ok != pdPASS) {
-        // The latch is HELD by the re-armed retry: every trigger skips until
-        // it fires, so the refresh is not lost.
+        // The retry re-enters this function, so the failure path must free the
+        // latch (ScheduleSpawnRetry does it before arming) or it never spawns.
         ESP_LOGW(TAG, "Failed to create the presence refresh task — retry in 60 s");
         ScheduleSpawnRetry(true);
     }
@@ -117,7 +117,9 @@ void Application::SchedulePresenceRefresh() {
 void Application::SchedulePresenceBurst() {
     // A sent command moved the cloud state: confirm with 5 polls one second apart.
     presence_burst_left_.store(kPresenceBurstCount);
-    SchedulePresenceRefresh();
+    // Called from the command worker task: marshal so only the main loop can
+    // touch the spawn-retry timer handle.
+    Schedule([this] { SchedulePresenceRefresh(); });
 }
 
 void Application::PresenceRefreshTask(void* arg) {
@@ -232,8 +234,8 @@ void Application::ScheduleSceneFetch() {
     const BaseType_t ok = xTaskCreate(SceneFetchTask, "tuya_scenes", kSceneFetchTaskStackBytes,
                                       this, kSceneFetchTaskPriority, nullptr);
     if (ok != pdPASS) {
-        // Latch held by the retry (see SchedulePresenceRefresh); the 60 s
-        // dispatch runs as a RETRY so a partial fetch keeps polling.
+        // Same latch rule as the presence path: the retry can only re-spawn by
+        // re-taking it, so arming frees it; the dispatch stays marked a RETRY.
         ESP_LOGW(TAG, "Failed to create the scene fetch task — retry in 60 s");
         ScheduleSpawnRetry(false);
     }
@@ -362,19 +364,30 @@ void Application::RunRoomRefresh() {
 }
 
 void Application::ScheduleSpawnRetry(bool presence) {
+    // Free the failed spawn's latch BEFORE arming: the retry re-enters the
+    // Schedule* function, which can spawn only if it can take the latch.
+    if (presence) {
+        presence_refresh_running_.store(false);
+    } else {
+        scene_fetch_running_.store(false);
+    }
     if (spawn_retry_timer_ == nullptr) {
         const esp_timer_create_args_t timer_args = {
             .callback =
                 [](void* arg) {
                     auto* app = static_cast<Application*>(arg);
-                    // Re-spawn the task family whose spawn failed; on the scene
-                    // side the dispatch is a RETRY (keeps the poll budget).
-                    if (app->spawn_retry_presence_.load()) {
-                        app->SchedulePresenceRefresh();
-                    } else {
-                        app->scene_fetch_is_retry_.store(true);
-                        app->ScheduleSceneFetch();
-                    }
+                    // esp_timer task: marshal so only the main loop arms the
+                    // spawn-retry timer handle.
+                    app->Schedule([app] {
+                        // Re-spawn the task family whose spawn failed; on the
+                        // scene side the dispatch is a RETRY (poll budget kept).
+                        if (app->spawn_retry_presence_.load()) {
+                            app->SchedulePresenceRefresh();
+                        } else {
+                            app->scene_fetch_is_retry_.store(true);
+                            app->ScheduleSceneFetch();
+                        }
+                    });
                 },
             .arg = this,
             .dispatch_method = ESP_TIMER_TASK,
@@ -382,14 +395,9 @@ void Application::ScheduleSpawnRetry(bool presence) {
             .skip_unhandled_events = false,
         };
         if (esp_timer_create(&timer_args, &spawn_retry_timer_) != ESP_OK) {
-            // No retry possible: release the latch the caller still holds.
             spawn_retry_timer_ = nullptr;
+            // The latch is already free: the next trigger retries the spawn.
             ESP_LOGW(TAG, "Failed to create the spawn retry timer — latch released");
-            if (presence) {
-                presence_refresh_running_.store(false);
-            } else {
-                scene_fetch_running_.store(false);
-            }
             return;
         }
     }
@@ -398,6 +406,7 @@ void Application::ScheduleSpawnRetry(bool presence) {
     // start_once fails with ESP_ERR_INVALID_STATE while the timer is armed.
     esp_timer_stop(spawn_retry_timer_);
     if (esp_timer_start_once(spawn_retry_timer_, kSpawnRetryDelayUs) != ESP_OK) {
+        // Latch already free, so a later trigger can arm this retry again.
         ESP_LOGW(TAG, "spawn retry timer re-arm failed");
     }
 }
@@ -436,8 +445,12 @@ void Application::RunSceneFetch() {
             .callback =
                 [](void* arg) {
                     auto* app = static_cast<Application*>(arg);
-                    app->scene_fetch_is_retry_.store(true);
-                    app->ScheduleSceneFetch();
+                    // esp_timer task: marshal so only the main loop can reach
+                    // the spawn-retry timer handle from this re-dispatch.
+                    app->Schedule([app] {
+                        app->scene_fetch_is_retry_.store(true);
+                        app->ScheduleSceneFetch();
+                    });
                 },
             .arg = this,
             .dispatch_method = ESP_TIMER_TASK,
